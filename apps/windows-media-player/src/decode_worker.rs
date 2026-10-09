@@ -5,6 +5,7 @@ use crate::pcm_ring::PcmRing;
 use rodio::{ChannelCount, Decoder, SampleRate, Source};
 use std::{
     fs::File,
+    io::BufReader,
     path::PathBuf,
     sync::{mpsc, Arc},
     thread,
@@ -39,7 +40,7 @@ pub fn prepare(path: PathBuf, position: Duration) -> Result<PreparedAudio, Strin
     thread::Builder::new()
         .name("zillaplayer-decode-worker".into())
         .spawn(move || {
-            let result = (|| -> Result<(Decoder<File>, TrackInfo), String> {
+            let result = (|| -> Result<(Decoder<BufReader<File>>, TrackInfo), String> {
                 let file = File::open(&path)
                     .map_err(|e| format!("Cannot read audio file: {e}"))?;
                 let mut decoder = Decoder::try_from(file)
