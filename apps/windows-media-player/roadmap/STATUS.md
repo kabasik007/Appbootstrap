@@ -64,7 +64,7 @@
 | ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows |
 | ZP-302 | high | Persist folders and playlists in SQLite with migrations | todo | Restart and migration fixture tests |
 | ZP-303 | high | Virtualized searchable library, sorting and metadata tags | todo | Search under 100 ms on reference library |
-| ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | todo | Unicode paths and playlist round-trips |
+| ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | implemented_unverified | M3U/M3U8 UTF-8 import/export, relative paths and Unicode roundtrip tests added; still requires Windows UI/large playlist smoke |
 | ZP-305 | medium | Cover art thumbnail cache, library watch and duplicate detection | todo | Filesystem changes and memory ceiling |
 
 ### P4 — Visualizers & themes
