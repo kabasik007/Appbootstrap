@@ -236,6 +236,23 @@ mod tests {
     }
 
     #[test]
+    fn level_meter_reads_real_pcm_samples_without_waiting() {
+        let ring = PcmRing::new(4096);
+        for _ in 0..1024 { ring.try_push(0.65).unwrap(); }
+        let mut source = BufferedPcmSource {
+            ring: Arc::clone(&ring),
+            channels: NonZeroU16::new(2).unwrap(),
+            sample_rate: NonZeroU32::new(44_100).unwrap(),
+            duration: None,
+            underflow_samples: 0,
+            analysis_samples: 0,
+            peak_window: 0.0,
+        };
+        for _ in 0..1024 { assert_eq!(source.next(), Some(0.65)); }
+        assert!((ring.peak_percent() - 65.).abs() < 0.001);
+    }
+
+    #[test]
     fn consumer_drop_signals_decoder_cancellation() {
         let ring = PcmRing::new(4096);
         {
