@@ -66,11 +66,22 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                         last_path = Some(path);
                     }
                     Err(error) => {
-                        state.transport = Transport::Error;
-                        state.detail = error;
-                        state.position = Duration::ZERO;
-                        state.has_track = false;
-                        state.duration = None;
+                        // If a different track is already playing, a bad new file
+                        // must never silence it or pretend that playback stopped.
+                        if let Some(previous) = sink.as_ref() {
+                            state.transport = if previous.is_paused() {
+                                Transport::Paused
+                            } else {
+                                Transport::Playing
+                            };
+                            state.detail = format!("Open failed; previous track kept: {error}");
+                        } else {
+                            state.transport = Transport::Error;
+                            state.detail = error;
+                            state.position = Duration::ZERO;
+                            state.has_track = false;
+                            state.duration = None;
+                        }
                     }
                 }
             }
