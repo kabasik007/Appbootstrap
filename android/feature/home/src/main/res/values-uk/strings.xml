@@ -1,0 +1,6 @@
+<resources>
+    <string name="home_title">Appbootstrap Android</string>
+    <string name="home_description">Робочий приклад архітектури. Додайте елемент, щоб перевірити потік даних.</string>
+    <string name="home_item_label">Назва елемента</string>
+    <string name="home_add">Додати</string>
+</resources>
