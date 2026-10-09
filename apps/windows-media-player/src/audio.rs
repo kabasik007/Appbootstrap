@@ -214,6 +214,9 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
             }
         }
         state.buffer_starvations = decoder.as_ref().map_or(0, |buffer| buffer.underruns());
+        state.audio_level_percent = if state.transport == Transport::Playing {
+            decoder.as_ref().map_or(0.0, |buffer| buffer.peak_percent())
+        } else { 0.0 };
         send_snapshot(&events, &state);
     }
 
