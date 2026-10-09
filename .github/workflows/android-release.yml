@@ -50,7 +50,7 @@ jobs:
       - name: Generate APK checksum
         run: |
           cd android/app/build/outputs/apk/release
-          sha256sum app-release.apk > SHA256SUMS
+          sha256sum app-release.apk | sed "s|  app-release.apk|  Appbootstrap-$GITHUB_REF_NAME.apk|" > SHA256SUMS
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
