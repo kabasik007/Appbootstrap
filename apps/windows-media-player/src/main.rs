@@ -106,6 +106,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
     let cmd = commands.clone();
+    ui.on_set_preamp(move |db| { let _ = cmd.send(Command::SetPreamp(db)); });
+    let cmd = commands.clone();
     ui.on_set_bass(move |db| { let _ = cmd.send(Command::SetBass(db)); });
     let cmd = commands.clone();
     ui.on_set_treble(move |db| { let _ = cmd.send(Command::SetTreble(db)); });
