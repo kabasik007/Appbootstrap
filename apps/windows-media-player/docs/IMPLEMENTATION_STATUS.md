@@ -10,7 +10,7 @@
 - A Rust audio control worker connects Rodio/CPAL playback and message-driven commands to Slint.
 - Pausing, switching tracks and seeking fade down then up with a 50–70 ms raised-cosine envelope. The sleeping/ramp code executes on the **control thread**, never directly in a Slint callback.
 - 31-band graphic EQ filter chain with ±12 dB, bass shelf, treble shelf, loudness switch, EQ bypass, preamp headroom and per-channel Biquad state. The compact UI exposes 15 of the 31 frequency bands.
-- Added targeted unit tests for playlist wraparound, scanner protocol, DSP finite output/coefficient validity and fade monotonicity.
+- Added targeted unit tests for playlist wraparound, recursive Unicode folder scanning and JSON Lines IPC, DSP finite output/coefficient validity, concurrent EQ snapshot updates, and fade monotonicity. Windows CI now includes a scanner subprocess smoke test (results not yet confirmed).
 
 ## Important limitations and technical debt
 
@@ -34,4 +34,4 @@ Requires Rust stable MSVC, Visual Studio 2022 Build Tools (C++ and Windows SDK).
 
 Manual checks: open MP3/FLAC/WAV, pause/resume/stop, repeated seeks and volume changes, EQ/bass/treble/loudness effect, scan nested directories, change folders mid-scan, next/previous playback, close while scanning, disabled audio device, and RAM/CPU sampling.
 
-**Next engineering gate:** obtain real compilation results, then separate decoder I/O from the audio callback via a bounded PCM ring buffer and move EQ coefficient generation out of the callback. Only then consider the audio engine production-grade.
+**Next engineering gate:** obtain passing Windows compilation, scanner subprocess smoke results and real listening measurements. EQ coefficient design is now moved to the control worker, but the Rodio source decode path must still be decoupled using a bounded PCM ring before the engine can be described as hard real-time safe.
