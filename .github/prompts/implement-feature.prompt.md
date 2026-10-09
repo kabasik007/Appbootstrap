@@ -3,7 +3,7 @@ description: Implement one feature with tests and factual verification
 ---
 # Implement feature
 
-Use `AGENTS.md` and the accepted feature spec. Feature: `\${input:feature:Reference a feature or spec}`
+Use `AGENTS.md` and the accepted feature spec. Feature: `${input:feature:Reference a feature or spec}`
 
 - First inspect repository conventions, architecture and existing test/build commands.
 - State a compact plan and impacted files.

@@ -3,7 +3,7 @@ description: Debug a reproducible defect without speculative large rewrites
 ---
 # Fix bug
 
-Follow `AGENTS.md`. Problem: `\${input:bug:Observed failure and reproduction steps}`
+Follow `AGENTS.md`. Problem: `${input:bug:Observed failure and reproduction steps}`
 
 1. Reproduce the observed behavior, or state precisely why reproduction is unavailable.
 2. Trace entry point and actual data flow; distinguish symptoms from root cause.

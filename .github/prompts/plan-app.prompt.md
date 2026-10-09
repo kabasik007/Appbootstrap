@@ -5,7 +5,7 @@ description: Turn an app idea into a verifiable, stack-agnostic plan
 
 Act as a principal engineer. Follow `AGENTS.md` and `docs/WORKFLOW.md`.
 
-User idea: `\${input:idea:Describe the application and users}`
+User idea: `${input:idea:Describe the application and users}`
 
 1. Summarize who uses it, primary job, must-haves and explicit non-goals.
 2. Identify target OS/devices, constraints, offline/data/security requirements; mark unknowns as **TBD**.

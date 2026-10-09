@@ -3,7 +3,7 @@ description: Measure responsiveness, memory, startup and bottlenecks before opti
 ---
 # Performance audit
 
-Follow `docs/PERFORMANCE.md`. Scope: `\${input:area:Which workload or screen to profile}`
+Follow `docs/PERFORMANCE.md`. Scope: `${input:area:Which workload or screen to profile}`
 
 - Record hardware, OS, build type, dataset, workload and tools.
 - Establish baseline metrics and a repeatable test; clearly mark unavailable measurements.
