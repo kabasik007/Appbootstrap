@@ -1,0 +1,13 @@
+# Android / Gradle local state
+.gradle/
+**/build/
+local.properties
+.idea/
+*.iml
+*.apk
+*.aab
+*.jks
+*.keystore
+captures/
+.externalNativeBuild/
+.cxx/
