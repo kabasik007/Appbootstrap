@@ -12,7 +12,7 @@ pub struct RoadmapView {
     pub next_gate: String,
 }
 
-const ALLOWED: &[&str] = &["todo", "in_progress", "implemented_unverified", "blocked", "verified"];
+const ALLOWED: &[&str] = &["todo", "planned", "in_progress", "implemented_unverified", "blocked", "verified"];
 
 pub fn bundled() -> Result<RoadmapView, String> {
     parse(include_str!("../roadmap/roadmap.json"))
@@ -112,7 +112,7 @@ pub fn parse(source: &str) -> Result<RoadmapView, String> {
 
 fn status_label(status: &str) -> &'static str {
     match status {
-        "todo" => "PLANNED",
+        "todo" | "planned" => "PLANNED",
         "in_progress" => "IN PROGRESS",
         "implemented_unverified" => "CODE / UNVERIFIED",
         "blocked" => "BLOCKED",
