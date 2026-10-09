@@ -1,37 +1,42 @@
-# ZillaPlayer implementation checkpoint — 10 October 2026
+# ZillaPlayer — P1 / Audio Engine 2.0 checkpoint
 
-**Code has been committed. A Windows build, audio playback and benchmarks have NOT been verified.**
+**Source updated: 10 October 2026. Windows build and audio playback remain UNVERIFIED.**
 
-## Added since the original UI prototype
+## Current code
 
-- Folder scanner launched as a **separate child process** of the player (flag: --scan-worker). It does not initialize the GUI or audio. On Windows the scanner has below-normal process priority.
-- Scanner stdout is JSON Lines. A dedicated reader thread sends bounded chunks of 64 tracks into a bounded 64-event UI queue; generation checks cancel outdated scans.
-- The main thread stays responsive and only renders the first ten file names. In-memory playlist domain supports up to 50,000 paths and Next/Previous/Select.
-- A Rust audio control worker connects Rodio/CPAL playback and message-driven commands to Slint.
-- Pausing, switching tracks and seeking fade down then up with a 50–70 ms raised-cosine envelope. The sleeping/ramp code executes on the **control thread**, never directly in a Slint callback.
-- 31-band graphic EQ filter chain with ±12 dB, bass shelf, treble shelf, loudness switch, EQ bypass, preamp headroom and per-channel Biquad state. The compact UI exposes 15 of the 31 frequency bands.
-- Added targeted unit tests for playlist wraparound, recursive Unicode folder scanning, JSON Lines IPC, M3U8 Unicode round-trip, DSP finite output/coefficient validity, concurrent EQ snapshot updates, and fade monotonicity. Windows CI now includes a scanner subprocess smoke test (results not yet confirmed).
+- Windows-first native Rust/Slint interface (Player, Library, Downloads, Tasks, Plans).
+- Separate audio **control** thread with Play/Pause/Stop, track switching, seek and master volume.
+- Background **decoder worker** handles file opening, Symphonia/Rodio decoding and seeking. It feeds a preallocated, bounded, lock-free SPSC f32 PCM ring.
+- Buffered audio source consumes PCM without decoding, disk I/O, sleeps, mutexes or allocation in its `next()` method.
+- Prebuffer at startup, explicit cancellation when stopping/switching tracks, EOF semantics and starvation counters.
+- Raised-cosine volume ramps and 31-band Biquad EQ with bass/treble/loudness/preamp/bypass. Coefficients are calculated in control worker and published through atomic revisioned snapshots.
+- Library scanner is a separate supervised, lower-priority child process with JSONL IPC, bounded batches, cancel/kill/reap and shutdown joining.
+- Up to 50k paths held in an in-memory queue, M3U/M3U8 import/export on background workers and first-ten preview.
+- Versioned P0–P7 roadmap (34 tasks) shown in Plans and Tasks from one JSON file; source-only code never appears as verified.
 
-## Important limitations and technical debt
+## Tests in source (not confirmed run)
 
-1. NO proof of successful Windows compilation or real MP3 playback: CI status and Windows host execution must be checked before calling this build ready.
-2. The existing Rodio decoder can still perform sample decoding during audio output callbacks. The audio **control** thread alone does not fully isolate decoder I/O. A pre-decoding producer thread and bounded PCM buffer are required next.
-3. EQ filter coefficients are now prepared by the audio CONTROL thread and published through an atomic revisioned snapshot. The audio path copies only stable coefficients at most once per 128 frames. The callback still may decode through Rodio and requires profiling; this is **not** proof of full real-time safety.
-4. The scanner runs in its own process under a supervisor using nonblocking `try_wait()` and an independent stdout reader. Cancellation kills and reaps the process; shutdown joins supervisors. Windows stress tests and profiling remain pending.
-5. Queue remains in-memory, but manual M3U/M3U8 UTF-8 import/export now exists via background workers. Automatic startup restoration, SQLite library index, album artwork, full 31-band UI and saved DSP presets are not finished.
-6. Loudness is an initial compensation contour, not yet calibrated or volume-dependent.
-7. Spectrum visualizer is currently **decorative**, not driven by live FFT. Downloader/Tasks/Plans are UI prototypes.
-8. Supported audio file formats must be tested on Windows with actual fixtures.
+- SPSC FIFO, wraparound, concurrent producer/consumer and true EOF vs temporary starvation.
+- Generated PCM WAV file decoded on an actual background worker (no copyrighted test media).
+- EQ numerical checks and simultaneous atomic parameter updates.
+- Scanner recursive Unicode tests / JSONL handling.
+- M3U8 round-trip / oversized input.
+- Volume, fade and seek input validation.
+- Windows Actions configuration includes `cargo check`, `cargo test`, release build and scanner-subprocess smoke.
 
-## Local Windows verification
+## Not yet shipped
 
-Requires Rust stable MSVC, Visual Studio 2022 Build Tools (C++ and Windows SDK). From apps/windows-media-player run:
+- Verified Windows EXE / actual audible playback / installation or startup timings.
+- Coalesced rapid seeks and a generation-based transport state machine.
+- Device recovery, robust gapless playback, real FFT, persisted SQLite library, all 31 EQ sliders / EQ preset storage.
+- yt-dlp/FFmpeg download manager and external plugin loader.
+- Stable performance limits, 8h soak test, signing and packaging.
 
-    cargo check
-    cargo test
-    cargo run
-    cargo build --release
+## Current engineering gate
 
-Manual checks: open MP3/FLAC/WAV, pause/resume/stop, repeated seeks and volume changes, EQ/bass/treble/loudness effect, scan nested directories, change folders mid-scan, import/export Unicode M3U8 lists, next/previous playback, close while scanning, disabled audio device, and RAM/CPU sampling.
+1. Get a **successful Windows Cargo check/test/release build**, record exact logs and commit `Cargo.lock`.
+2. Test WAV/FLAC/MP3 on a Windows audio device including pause, seek and switching.
+3. Measure PCM underruns, CPU/RAM and device handling. Resolve any decoder or UI build/runtime errors.
+4. Implement coalesced rapid-seek handling (ZP-103), then SQLite library, real FFT and downloader as isolated modules.
 
-**Next engineering gate:** obtain passing Windows compilation, scanner subprocess smoke results and real listening measurements. EQ coefficient design is now moved to the control worker, but the Rodio source decode path must still be decoupled using a bounded PCM ring before the engine can be described as hard real-time safe.
+No "all tests passed" claim exists until the Windows runner actually produces results.
