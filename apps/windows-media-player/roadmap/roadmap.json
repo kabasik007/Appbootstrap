@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "product": "ZillaPlayer",
+  "as_of": "2026-10-10",
+  "status_note": "Code written != validated. Progress is not a percentage until checks run.",
+  "statuses": {
+    "todo": "Planned",
+    "in_progress": "In progress",
+    "implemented_unverified": "Code written / not verified",
+    "blocked": "Blocked",
+    "verified": "Verified"
+  },
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Toolchain & architecture",
+      "status": "in_progress",
+      "goal": "Get a reproducible Windows build and a defensible threading design",
+      "gate": "cargo fmt --check, cargo clippy -D warnings, cargo test, Windows release EXE and playback smoke all evidenced",
+      "tasks": [
+        {
+          "id": "ZP-001",
+          "title": "Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "CI Windows cargo check/test/build + lockfile"
+        },
+        {
+          "id": "ZP-002",
+          "title": "Profile startup, memory, CPU and callback timing on Windows 10/11",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Repeatable measurements on declared x64 hardware"
+        },
+        {
+          "id": "ZP-003",
+          "title": "Create module boundaries, P0 technical ADRs and roadmap source",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Review and validate repo plan JSON + documentation"
+        },
+        {
+          "id": "ZP-004",
+          "title": "Check Slint, FFmpeg and yt-dlp distribution licenses",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Signed-off license matrix"
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Reliable local playback",
+      "status": "in_progress",
+      "goal": "Local playback must remain responsive during scan and seeking",
+      "gate": "MP3/FLAC/WAV playback, 500 seek/pause/switch loops and unplug/replug recovery",
+      "tasks": [
+        {
+          "id": "ZP-101",
+          "title": "Open audio, Play/Pause/Stop, seek, master volume",
+          "priority": "blocker",
+          "status": "implemented_unverified",
+          "verification": "Windows manual smoke + transport tests"
+        },
+        {
+          "id": "ZP-102",
+          "title": "Replace decoder-on-callback with background producer and bounded PCM ring",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "Callback must avoid disk/decoder work; measure underruns"
+        },
+        {
+          "id": "ZP-103",
+          "title": "Coalesced transport commands and cancellation generations",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Stress with rapid seeks and track switching"
+        },
+        {
+          "id": "ZP-104",
+          "title": "Click-free pause, stop, seek and track switch with short audio fades",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Listen and analyze waveforms for clicks"
+        },
+        {
+          "id": "ZP-105",
+          "title": "Detect and recover missing/changed WASAPI output devices",
+          "priority": "high",
+          "status": "todo",
+          "verification": "USB/speaker device change tests"
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Advanced DSP / EQ",
+      "status": "in_progress",
+      "goal": "Audible, stable EQ that remains real-time safe",
+      "gate": "Frequency response and signal tests, real hardware performance budget, no audible zipper/clicks",
+      "tasks": [
+        {
+          "id": "ZP-201",
+          "title": "31-band EQ + bass/treble + preamp + bypass + loudness prototype",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Rust DSP tests plus listening and frequency sweeps"
+        },
+        {
+          "id": "ZP-202",
+          "title": "Move EQ coefficient design from callback into control worker",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "No trig/heap/locks in audio callback"
+        },
+        {
+          "id": "ZP-203",
+          "title": "Complete editable 31-band GUI and 10-band compact preset view",
+          "priority": "high",
+          "status": "todo",
+          "verification": "All bands adjustable, presets restored"
+        },
+        {
+          "id": "ZP-204",
+          "title": "Gain staging, ReplayGain, limiter and clipping meter",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Peak/response and clipping tests"
+        },
+        {
+          "id": "ZP-205",
+          "title": "User-defined DSP presets with import/export",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Schema and migration tests"
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Library & playlists",
+      "status": "in_progress",
+      "goal": "Handle large music libraries without freezing UI or losing data",
+      "gate": "50k files, cancel/rescan, offline devices and persisted playlists tested",
+      "tasks": [
+        {
+          "id": "ZP-301",
+          "title": "Scanner subprocess, JSONL IPC and bounded UI batches",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Scan/cancel 50k files while audio plays; no orphan process"
+        },
+        {
+          "id": "ZP-302",
+          "title": "Persist folders and playlists in SQLite with migrations",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Restart and migration fixture tests"
+        },
+        {
+          "id": "ZP-303",
+          "title": "Virtualized searchable library, sorting and metadata tags",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Search under 100 ms on reference library"
+        },
+        {
+          "id": "ZP-304",
+          "title": "M3U/M3U8 import/export and proper track queue selection",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Unicode paths and playlist round-trips"
+        },
+        {
+          "id": "ZP-305",
+          "title": "Cover art thumbnail cache, library watch and duplicate detection",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Filesystem changes and memory ceiling"
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Visualizers & themes",
+      "status": "planned",
+      "goal": "Accurate responsive effects that never stall audio",
+      "gate": "FFT driven by real PCM, 30/60 fps caps and rendering measurements",
+      "tasks": [
+        {
+          "id": "ZP-401",
+          "title": "Nonblocking PCM telemetry tap and FFT analysis worker",
+          "priority": "high",
+          "status": "todo",
+          "verification": "FFT fed by actual playback samples"
+        },
+        {
+          "id": "ZP-402",
+          "title": "Spectrum, oscilloscope, waveform, VU and peak-meter views",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Functional Slint visual modes"
+        },
+        {
+          "id": "ZP-403",
+          "title": "Custom skins, resizable panels, DPI and compact Winamp-like mode",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "125/150/200% DPI and keyboard tests"
+        },
+        {
+          "id": "ZP-404",
+          "title": "Throttle/freeze visualizer when minimized or battery-saving",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Idle CPU benchmark"
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Media downloader",
+      "status": "planned",
+      "goal": "Optional yt-dlp jobs isolated from playback",
+      "gate": "Authorized audio/video/playlist downloads, cancellation and error reporting verified",
+      "tasks": [
+        {
+          "id": "ZP-501",
+          "title": "yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Pinned versions, licensing and missing-tool errors"
+        },
+        {
+          "id": "ZP-502",
+          "title": "URL analysis, playlist selection and safe format presets",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Preview/choose on permitted fixtures"
+        },
+        {
+          "id": "ZP-503",
+          "title": "Bounded persisted job queue, retry/cancel and progress IPC",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Interrupt/restart/download-with-music stress"
+        },
+        {
+          "id": "ZP-504",
+          "title": "Postprocess audio, sanitize destinations and auto-import completed files",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "File escaping, transcode and duplicate tests"
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "Extension API",
+      "status": "planned",
+      "goal": "Optional plugins cannot crash music playback",
+      "gate": "Version mismatch/crashing plugin safely disabled without playback dropouts",
+      "tasks": [
+        {
+          "id": "ZP-601",
+          "title": "Versioned manifest and plugin capability schema",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Compatibility and invalid-manifest tests"
+        },
+        {
+          "id": "ZP-602",
+          "title": "Out-of-process metadata/downloader plugin host with restricted IPC",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Crash/timeouts/security tests"
+        },
+        {
+          "id": "ZP-603",
+          "title": "DSP effect plugin feasibility ADR (CLAP/VST if justified)",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Real-time safety and license review"
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "name": "Release & distribution",
+      "status": "planned",
+      "goal": "Small, reliable installable Windows product",
+      "gate": "Signed installer/portable build and release smoke tests on supported Windows versions",
+      "tasks": [
+        {
+          "id": "ZP-701",
+          "title": "Windows clean install/upgrade/uninstall/portable packaging",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Two Windows versions, update/uninstall tests"
+        },
+        {
+          "id": "ZP-702",
+          "title": "Crash diagnostics, privacy-safe logging and repair tools",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Failure injection and recovery"
+        },
+        {
+          "id": "ZP-703",
+          "title": "8-hour audio soak with scanning/EQ/downloads and user acceptance",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "CPU/RAM/underruns and crash report"
+        },
+        {
+          "id": "ZP-704",
+          "title": "Signed public alpha/beta and licenses/third-party notices",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "Release artifact/signature/checksum verification"
+        }
+      ]
+    }
+  ]
+}
