@@ -1,8 +1,8 @@
 //! Folder scanning runs in a separate CHILD PROCESS, never on UI or audio threads.
 //! IPC is newline-delimited JSON with bounded batches and cancellation.
-use std::{fs, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf},
+use std::{cell::RefCell, fs, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf},
           process::{Command, Stdio}, sync::{Arc, atomic::{AtomicBool, AtomicU64, Ordering},
-          mpsc::{sync_channel, Receiver, SyncSender, TrySendError}}, thread, time::Duration};
+          mpsc::{sync_channel, Receiver, SyncSender, TrySendError}}, thread::{self, JoinHandle}, time::Duration};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -20,6 +20,7 @@ pub struct LibraryScanner {
     generation: Arc<AtomicU64>,
     sender: SyncSender<ScanEvent>,
     pub updates: Receiver<ScanEvent>,
+    workers: RefCell<Vec<JoinHandle<()>>>,
 }
 // Do not get permanently stuck sending into a full UI event queue.
 // On cancellation, return so the supervisor can kill/wait for its child.
@@ -41,16 +42,42 @@ fn deliver(sender: &SyncSender<ScanEvent>, generation: &AtomicU64, serial: u64,
 impl LibraryScanner {
     pub fn new() -> Self {
         let (sender, updates) = sync_channel(64);
-        Self { generation: Arc::new(AtomicU64::new(0)), sender, updates }
+        Self { generation: Arc::new(AtomicU64::new(0)), sender, updates,
+            workers: RefCell::new(Vec::new()) }
     }
     pub fn scan(&self, folder: PathBuf) -> u64 {
         let serial = self.generation.fetch_add(1, Ordering::AcqRel) + 1;
         let generation = Arc::clone(&self.generation);
         let sender = self.sender.clone();
-        thread::spawn(move || read_child(folder, serial, generation, sender));
+        let launched = thread::Builder::new().name("zillaplayer-scanner-supervisor".into())
+            .spawn(move || read_child(folder, serial, generation, sender));
+        match launched {
+            Ok(handle) => {
+                let mut workers = self.workers.borrow_mut();
+                let mut index = 0;
+                while index < workers.len() {
+                    if workers[index].is_finished() {
+                        let finished = workers.swap_remove(index);
+                        let _ = finished.join();
+                    } else { index += 1; }
+                }
+                workers.push(handle);
+            }
+            Err(error) => {
+                let _ = self.sender.try_send(ScanEvent::Error(serial, error.to_string()));
+            }
+        }
         serial
     }
     pub fn cancel(&self) { self.generation.fetch_add(1, Ordering::AcqRel); }
+
+    /// Called on app exit. Join supervisers so their children are killed/reaped.
+    pub fn shutdown(&self) {
+        self.cancel();
+        for worker in self.workers.borrow_mut().drain(..) {
+            let _ = worker.join();
+        }
+    }
 }
 
 fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: SyncSender<ScanEvent>) {
