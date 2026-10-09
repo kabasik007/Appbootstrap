@@ -47,6 +47,10 @@ jobs:
       - name: Verify APK signature
         run: |
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose             android/app/build/outputs/apk/release/app-release.apk
+      - name: Generate APK checksum
+        run: |
+          cd android/app/build/outputs/apk/release
+          sha256sum app-release.apk > SHA256SUMS
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
