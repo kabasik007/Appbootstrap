@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: Added Rust session-v1.json persistence with backup and background I/O, live PCM peak meter (not FFT), and fixed Rodio Decoder<BufReader<File>> typing. All new source remains unverified by a Windows build.",
+  "status_note": "2026-10-10: v0.1 live FFT analyzer with bounded loss-tolerant PCM tap, dedicated RustFFT worker and atomic 32-band Slint display committed; no Windows executable or test pass has been independently confirmed.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -191,15 +191,15 @@
           "id": "ZP-401",
           "title": "Nonblocking PCM telemetry tap and FFT analysis worker",
           "priority": "high",
-          "status": "in_progress",
-          "verification": "Actual PCM peak level telemetry and UI bar implemented with atomic sample snapshots; frequency-domain FFT worker and audio/display performance tests still pending"
+          "status": "implemented_unverified",
+          "verification": "Bounded PCM tap, separate RustFFT worker, Hann-2048 FFT, log 32-band atomics and 20 FPS Slint model committed; generated sine tests and Windows builds/perf/listening pending"
         },
         {
           "id": "ZP-402",
           "title": "Spectrum, oscilloscope, waveform, VU and peak-meter views",
           "priority": "medium",
-          "status": "todo",
-          "verification": "Functional Slint visual modes"
+          "status": "in_progress",
+          "verification": "Dynamic real spectrum bars and PCM peak meter implemented in source; oscilloscope, waveform, multichannel VU and hardware validation still pending"
         },
         {
           "id": "ZP-403",
