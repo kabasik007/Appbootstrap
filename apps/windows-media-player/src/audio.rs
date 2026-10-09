@@ -61,9 +61,17 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
     let mut position_offset = Duration::ZERO;
     let mut state = PlaybackState::default();
     let eq = EqControls::new();
+    let mut deferred_command: Option<Command> = None;
 
     loop {
-        match commands.recv_timeout(Duration::from_millis(150)) {
+        // Retain FIFO order for non-seek commands while collapsing a burst of
+        // adjacent seeks into the most recent target before opening a decoder.
+        let incoming = if let Some(saved) = deferred_command.take() {
+            Ok(saved)
+        } else {
+            commands.recv_timeout(Duration::from_millis(150))
+        };
+        match incoming {
             Ok(Command::Shutdown) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
             Ok(Command::Open(path)) => {
@@ -148,7 +156,8 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 state.has_track = file.is_some();
                 state.detail = "Stopped".into();
             }
-            Ok(Command::SeekPercent(percent)) => {
+            Ok(Command::SeekPercent(first_percent)) => {
+                let percent = collapse_adjacent_seeks(first_percent, &commands, &mut deferred_command);
                 if let (Some(path), Some(target)) = (
                     file.as_ref(), seek_position(percent, state.duration),
                 ) {
@@ -256,6 +265,48 @@ fn install_track(
         else { fade(current, 0.0, volume, 70); }
     }
     Ok(duration)
+}
+
+/// Coalesce only consecutive seek commands; preserve FIFO for all other input.
+fn collapse_adjacent_seeks(
+    first: f32,
+    commands: &Receiver<Command>,
+    deferred: &mut Option<Command>,
+) -> f32 {
+    let mut target = first;
+    while let Ok(next) = commands.try_recv() {
+        match next {
+            Command::SeekPercent(percent) => target = percent,
+            other => { *deferred = Some(other); break; }
+        }
+    }
+    target
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rapid_seeks_collapse_without_losing_stop() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Command::SeekPercent(10.)).unwrap();
+        tx.send(Command::SeekPercent(42.)).unwrap();
+        tx.send(Command::SeekPercent(88.)).unwrap();
+        tx.send(Command::Stop).unwrap();
+        let Command::SeekPercent(first) = rx.recv().unwrap() else { panic!("first event") };
+        let mut deferred = None;
+        let pct = collapse_adjacent_seeks(first, &rx, &mut deferred);
+        assert_eq!(pct, 88.);
+        assert!(matches!(deferred, Some(Command::Stop)));
+    }
+    #[test]
+    fn eq_update_is_not_discarded_by_seek_collapse() {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Command::SetEqBand(16, 3.)).unwrap();
+        let mut pending = None;
+        assert_eq!(collapse_adjacent_seeks(35., &rx, &mut pending), 35.);
+        assert!(matches!(pending, Some(Command::SetEqBand(16, gain)) if gain == 3.));
+    }
 }
 
 fn send_snapshot(sender: &SyncSender<PlaybackState>, state: &PlaybackState) {
