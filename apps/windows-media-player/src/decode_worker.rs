@@ -174,6 +174,50 @@ mod tests {
     }
 
     #[test]
+    fn generated_wav_decodes_on_worker_and_produces_pcm() {
+        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+        // Generate a tiny redistributable WAV in memory; no test music required.
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "zillaplayer-pcm-{}-{stamp}.wav", std::process::id()
+        ));
+        let frames: usize = 8_820; // 200 ms @ 44.1 kHz, mono, 16-bit PCM.
+        let data_len = (frames * 2) as u32;
+        let mut wav = Vec::with_capacity(44 + data_len as usize);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+        wav.extend_from_slice(b"WAVEfmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes()); // PCM
+        wav.extend_from_slice(&1_u16.to_le_bytes()); // 1 channel
+        wav.extend_from_slice(&44_100_u32.to_le_bytes());
+        wav.extend_from_slice(&88_200_u32.to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_len.to_le_bytes());
+        for index in 0..frames {
+            let sample: i16 = if index % 4 < 2 { 12_000 } else { -12_000 };
+            wav.extend_from_slice(&sample.to_le_bytes());
+        }
+        fs::write(&path, wav).unwrap();
+
+        let mut prepared = prepare(path.clone(), Duration::ZERO)
+            .expect("generated WAV should be accepted by the decoder");
+        assert_eq!(prepared.source.channels.get(), 1);
+        assert_eq!(prepared.source.sample_rate.get(), 44_100);
+        let mut heard_signal = false;
+        for _ in 0..3_000 {
+            if let Some(sample) = prepared.source.next() {
+                if sample.abs() > 0.1 { heard_signal = true; break; }
+            } else { break; }
+        }
+        assert!(heard_signal, "decoded PCM must contain an audible sample");
+        prepared.cancel.cancel();
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn consumer_drop_signals_decoder_cancellation() {
         let ring = PcmRing::new(4096);
         {
