@@ -50,7 +50,7 @@
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
 | ZP-201 | high | 31-band EQ + bass/treble + preamp + bypass + loudness prototype | implemented_unverified | Rust DSP tests plus listening and frequency sweeps |
-| ZP-202 | blocker | Move EQ coefficient design from callback into control worker | todo | No trig/heap/locks in audio callback |
+| ZP-202 | blocker | Move EQ coefficient design from callback into control worker | implemented_unverified | Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling |
 | ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | todo | All bands adjustable, presets restored |
 | ZP-204 | high | Gain staging, ReplayGain, limiter and clipping meter | todo | Peak/response and clipping tests |
 | ZP-205 | medium | User-defined DSP presets with import/export | todo | Schema and migration tests |
@@ -61,7 +61,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Scan/cancel 50k files while audio plays; no orphan process |
+| ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows |
 | ZP-302 | high | Persist folders and playlists in SQLite with migrations | todo | Restart and migration fixture tests |
 | ZP-303 | high | Virtualized searchable library, sorting and metadata tags | todo | Search under 100 ms on reference library |
 | ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | todo | Unicode paths and playlist round-trips |
