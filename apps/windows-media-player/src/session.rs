@@ -158,8 +158,15 @@ fn write_to(path: &Path, snapshot: &SavedSession) -> io::Result<()> {
     let backup = path.with_extension("json.bak");
     fs::write(&temp, payload)?;
     if path.exists() {
-        if backup.exists() { fs::remove_file(&backup)?; }
-        fs::rename(path, &backup)?;
+        // Keep the last valid backup. If the primary was corrupted by a
+        // previous crash, never replace a working backup with broken JSON.
+        match read_one(path) {
+            Ok(Some(_)) => {
+                if backup.exists() { fs::remove_file(&backup)?; }
+                fs::rename(path, &backup)?;
+            }
+            _ => fs::remove_file(path)?,
+        }
     }
     if let Err(error) = fs::rename(&temp, path) {
         if backup.exists() { let _ = fs::rename(&backup, path); }
@@ -205,6 +212,27 @@ mod tests {
         fs::write(&path, b"corrupt-json").unwrap();
         let recovered = read_from(&path).unwrap();
         assert_eq!(recovered.tracks, initial.tracks);
+        fs::remove_file(&path).unwrap();
+        fs::remove_file(path.with_extension("json.bak")).unwrap();
+    }
+
+    #[test]
+    fn saving_over_corrupt_primary_preserves_valid_backup() {
+        let path = temp_path();
+        let first = SavedSession {
+            tracks: vec![PathBuf::from("first.flac")], selected: Some(0),
+        };
+        write_to(&path, &first).unwrap();
+        write_to(&path, &SavedSession {
+            tracks: vec![PathBuf::from("second.mp3")], selected: Some(0),
+        }).unwrap();
+        fs::write(&path, b"{garbled").unwrap();
+        write_to(&path, &SavedSession {
+            tracks: vec![PathBuf::from("third.wav")], selected: Some(0),
+        }).unwrap();
+        assert_eq!(read_from(&path).unwrap().tracks[0], PathBuf::from("third.wav"));
+        assert_eq!(read_one(&path.with_extension("json.bak")).unwrap()
+            .unwrap().tracks[0], PathBuf::from("first.flac"));
         fs::remove_file(&path).unwrap();
         fs::remove_file(path.with_extension("json.bak")).unwrap();
     }
