@@ -21,7 +21,7 @@ The module `src/session.rs` introduces interim **session-v1.json**, independent 
 
 `src/decode_worker.rs` gathers a peak envelope from **actual decoded PCM samples consumed by the output source**. It writes a peak value to the shared `PcmRing` once per 1024 samples; no mutex, heap allocation, disk operation, or FFT is done per audio sample.
 
-The audio control worker reads a lossy atomic snapshot and publishes `audio_level_percent` in `PlaybackState`. The Slint Player shows it as a live blue **PCM peak bar**. The large spectrum graphic is still a decorative preview, **not a real FFT analyzer**. FFT processing, smoothing and VU/peak behavior per channel belong to Phase P4.
+The audio control worker reads a lossy atomic snapshot and publishes `audio_level_percent` in `PlaybackState`. The Slint Player shows it as a live blue **PCM peak bar**. The large spectrum now has a **dedicated RustFFT analysis worker with 32 live logarithmic frequency bands**, but its Windows runtime behavior remains unverified. VU/peak behavior per channel, a waveform/oscilloscope and user customizations are still planned. See [LIVE_VISUALIZER.md](LIVE_VISUALIZER.md).
 
 A new Rust unit test feeds a sequence of 0.65-amplitude PCM samples and checks that the meter exposes a 65% peak. This is a **code-level test**, not yet an executed test result.
 
@@ -31,7 +31,7 @@ A new Rust unit test feeds a sequence of 0.65-amplitude PCM samples and checks t
 2. Start with a test playlist. Close and reopen; confirm track count and selection without automatic playback.
 3. Scan a large folder, close and reopen; confirm saved paths, responsiveness, and no truncated JSON.
 4. Manually corrupt the primary session file; confirm backup restore and clear diagnostics.
-5. Play a generated WAV or authorized music sample; verify peak bar moves with the audio signal but the spectrum remains labeled preview.
+5. Play a generated WAV or authorized music sample; verify both the PCM peak bar and **live FFT spectrum** respond, and Pause/Stop clear the spectrum.
 6. Measure callback sample processing cost, PCM starvation count and background disk activity.
 
-**Roadmap:** ZP-302 (interim state written; SQLite incomplete) and ZP-401 (peak data written; FFT incomplete) remain `in_progress`, not `verified`.
+**Roadmap:** ZP-302 (interim state written; SQLite incomplete) and ZP-401 (FFT code written, Windows verification pending) is `implemented_unverified`, not `verified`.
