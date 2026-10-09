@@ -17,3 +17,9 @@
 ## Verify
 Cold launch on baseline device, 60/120 Hz smoothness as applicable, battery, network changes, low-memory recovery, offline conflicts, permissions and store packaging/signing.
 
+## Native Android implementation (android branch)
+
+A build-oriented example lives at [android/README.md](../android/README.md).
+For a new app with Kotlin/Compose and separate model/data/feature modules, use
+`python3 scripts/new_android_project.py --name "My App" --package com.example.myapp --output ../myapp`.
+This is **one** mobile stack choice, not a replacement for Swift/Flutter/React Native.
