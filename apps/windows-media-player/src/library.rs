@@ -4,6 +4,9 @@ use std::{fs, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf},
           process::{Command, Stdio}, sync::{Arc, atomic::{AtomicU64, Ordering},
           mpsc::{sync_channel, Receiver, SyncSender}}, thread};
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 const MAX_TRACKS: usize = 50_000;
 const BATCH: usize = 64;
 
@@ -36,8 +39,13 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
     let Ok(exe) = std::env::current_exe() else {
         let _ = sender.send(ScanEvent::Error(serial, "Cannot locate scanner executable".into())); return;
     };
-    let mut child = match Command::new(exe).arg("--scan-worker").arg(folder)
-        .stdin(Stdio::null()).stderr(Stdio::null()).stdout(Stdio::piped()).spawn() {
+    let mut command = Command::new(exe);
+    command.arg("--scan-worker").arg(folder)
+        .stdin(Stdio::null()).stderr(Stdio::null()).stdout(Stdio::piped());
+    // Windows BELOW_NORMAL_PRIORITY_CLASS: scanner must not starve audio.
+    #[cfg(windows)]
+    command.creation_flags(0x0000_4000);
+    let mut child = match command.spawn() {
         Ok(child) => child,
         Err(err) => { let _ = sender.send(ScanEvent::Error(serial, err.to_string())); return; }
     };
