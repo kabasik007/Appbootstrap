@@ -2,6 +2,7 @@
 //!
 //! P1 bootstrap deliberately uses Rodio's CPAL/Symphonia backend for a reliable
 //! vertical slice. Custom callback-safe DSP and FFT remain separate P2/P4 tasks.
+use crate::dsp::{EqControls, EqSource};
 use crate::playback::{
     format_duration, media_title, normalise_volume, seek_position, PlaybackState, Transport,
 };
@@ -10,6 +11,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TrySendError};
 use std::thread;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Debug)]
@@ -19,6 +21,12 @@ pub enum Command {
     Stop,
     SeekPercent(f32),
     SetVolume(f32),
+    SetEqBand(usize, f32),
+    SetPreamp(f32),
+    SetBass(f32),
+    SetTreble(f32),
+    SetLoudness(bool),
+    EnableEq(bool),
     Shutdown,
 }
 
@@ -44,6 +52,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
     let mut sink: Option<Sink> = None;
     let mut last_path: Option<PathBuf> = None;
     let mut state = PlaybackState::default();
+    let eq = EqControls::new();
 
     loop {
         match commands.recv_timeout(Duration::from_millis(200)) {
@@ -55,7 +64,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 state.transport = Transport::Idle;
                 send_snapshot(&events, &state);
 
-                match open_track(&path, &mut stream, &mut sink, state.volume) {
+                match open_track(&path, &mut stream, &mut sink, state.volume, Arc::clone(&eq)) {
                     Ok(duration) => {
                         state.title = media_title(&path);
                         state.position = Duration::ZERO;
@@ -88,16 +97,19 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
             Ok(Command::TogglePlay) => {
                 if let Some(current) = sink.as_ref() {
                     if current.is_paused() {
+                        current.set_volume(0.0);
                         current.play();
+                        fade(current, 0.0, state.volume, 60);
                         state.transport = Transport::Playing;
                         state.detail = "Resumed".into();
                     } else {
+                        fade(current, current.volume(), 0.0, 55);
                         current.pause();
                         state.transport = Transport::Paused;
                         state.detail = "Paused".into();
                     }
                 } else if let Some(path) = last_path.as_ref() {
-                    match open_track(path, &mut stream, &mut sink, state.volume) {
+                    match open_track(path, &mut stream, &mut sink, state.volume, Arc::clone(&eq)) {
                         Ok(duration) => {
                             state.duration = duration;
                             state.position = Duration::ZERO;
@@ -117,6 +129,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
             }
             Ok(Command::Stop) => {
                 if let Some(current) = sink.take() {
+                    fade(&current, current.volume(), 0.0, 50);
                     current.stop();
                 }
                 state.transport = Transport::Stopped;
@@ -128,21 +141,33 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 if let (Some(current), Some(position)) =
                     (sink.as_ref(), seek_position(percent, state.duration))
                 {
+                    let paused = current.is_paused();
+                    if !paused { fade(current, current.volume(), 0.0, 45); }
                     match current.try_seek(position) {
                         Ok(()) => {
                             state.position = position;
-                            state.detail = "Seek complete".into();
+                            state.detail = "Seek complete (soft transition)".into();
                         }
                         Err(error) => state.detail = format!("Seek unavailable: {error}"),
                     }
+                    if !paused { fade(current, 0.0, state.volume, 65); }
+                    else { current.set_volume(state.volume); }
                 }
             }
             Ok(Command::SetVolume(percent)) => {
                 state.volume = normalise_volume(percent);
                 if let Some(current) = sink.as_ref() {
-                    current.set_volume(state.volume);
+                    if !current.is_paused() {
+                        fade(current, current.volume(), state.volume, 20);
+                    } else { current.set_volume(state.volume); }
                 }
             }
+            Ok(Command::SetEqBand(i, db)) => eq.set_band(i, db),
+            Ok(Command::SetPreamp(db)) => eq.set_preamp(db),
+            Ok(Command::SetBass(db)) => eq.set_bass(db),
+            Ok(Command::SetTreble(db)) => eq.set_treble(db),
+            Ok(Command::SetLoudness(on)) => eq.loudness.store(on, std::sync::atomic::Ordering::Relaxed),
+            Ok(Command::EnableEq(on)) => eq.enabled.store(on, std::sync::atomic::Ordering::Relaxed),
         }
 
         if let Some(current) = sink.as_ref() {
@@ -166,6 +191,7 @@ fn open_track(
     stream: &mut Option<OutputStream>,
     sink: &mut Option<Sink>,
     volume: f32,
+    eq: Arc<EqControls>,
 ) -> Result<Option<Duration>, String> {
     if !path.is_file() {
         return Err(format!("File not found: {}", path.display()));
@@ -186,10 +212,14 @@ fn open_track(
         return Err("Audio output unavailable".into());
     };
     let new_sink = Sink::connect_new(device.mixer());
-    new_sink.set_volume(volume);
-    new_sink.append(source);
+    new_sink.set_volume(0.0);
+    new_sink.append(EqSource::new(source, eq));
     if let Some(previous) = sink.replace(new_sink) {
+        fade(&previous, previous.volume(), 0.0, 60);
         previous.stop();
+    }
+    if let Some(new_sink) = sink.as_ref() {
+        fade(new_sink, 0.0, volume, 70);
     }
     Ok(duration)
 }
@@ -205,4 +235,17 @@ pub fn status_text(state: &PlaybackState) -> String {
     let position = format_duration(state.position);
     let duration = state.duration.map(format_duration).unwrap_or_else(|| "--:--".into());
     format!("{} | {position}/{duration} | {}", state.label(), state.detail)
+}
+
+
+/// Smooth envelope on the control thread only. Never sleeps on the CPAL callback.
+fn fade(sink: &Sink, start: f32, finish: f32, milliseconds: u64) {
+    const STEPS: u64 = 10;
+    for step in 1..=STEPS {
+        let t = step as f32 / STEPS as f32;
+        // Raised cosine envelope has zero slope at both ends.
+        let weight = (1.0 - (std::f32::consts::PI * t).cos()) * 0.5;
+        sink.set_volume(start + (finish - start) * weight);
+        thread::sleep(Duration::from_millis(milliseconds / STEPS));
+    }
 }
