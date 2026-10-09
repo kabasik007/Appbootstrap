@@ -10,6 +10,7 @@ mod playlist;
 mod queue;
 mod roadmap;
 mod session;
+mod visualizer;
 
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
@@ -17,8 +18,9 @@ use playback::{format_duration, Transport};
 use queue::PlayQueue;
 use session::{SavedSession, SessionStore};
 use slint::{ComponentHandle, Model, SharedString, VecModel};
+use visualizer::BANDS;
 use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc,
-    sync::mpsc::{self, Sender}, thread, time::Duration};
+    sync::{mpsc::{self, Sender}, Arc}, thread, time::Duration};
 
 slint::include_modules!();
 
@@ -75,7 +77,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     ui.set_roadmap_items(milestone_model.into());
     ui.set_focus_tasks(task_model.into());
-    let AudioController { commands, updates } = start_audio_worker();
+    let AudioController { commands, updates, spectrum } = start_audio_worker();
+    // Spectrum values are published by an isolated FFT thread. Slint receives
+    // only throttled ready-to-draw f32 model updates, never PCM arrays.
+    let spectrum_model: Rc<VecModel<f32>> =
+        Rc::new(VecModel::from(vec![0.0_f32; BANDS]));
+    ui.set_spectrum_bars(spectrum_model.clone().into());
+    let spectrum_for_ui = Arc::clone(&spectrum);
+    let visual_window = ui.as_weak();
+    let visual_timer = slint::Timer::default();
+    visual_timer.start(slint::TimerMode::Repeated, Duration::from_millis(50), move || {
+        if visual_window.upgrade().is_none() { return; }
+        for (index, level) in spectrum_for_ui.read().iter().enumerate() {
+            // Skip identical values to avoid needless layout/render invalidation.
+            if spectrum_model.row_data(index).is_none_or(|old| (old - level).abs() > 0.75) {
+                spectrum_model.set_row_data(index, *level);
+            }
+        }
+    });
     let scanner = Rc::new(LibraryScanner::new());
     let scan_serial = Rc::new(Cell::new(0u64));
     let queue = Rc::new(RefCell::new(PlayQueue::default()));
