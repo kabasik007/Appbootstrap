@@ -211,11 +211,19 @@ fn open_track(
     let Some(device) = stream.as_ref() else {
         return Err("Audio output unavailable".into());
     };
+    // Fade and pause old playback *before* publishing coefficients for the
+    // next track's sample rate. Otherwise two live sources could temporarily
+    // share the wrong EQ design during an overlapping transition.
+    if let Some(previous) = sink.as_ref() {
+        if !previous.is_paused() {
+            fade(previous, previous.volume(), 0.0, 60);
+            previous.pause();
+        }
+    }
     let new_sink = Sink::connect_new(device.mixer());
     new_sink.set_volume(0.0);
     new_sink.append(EqSource::new(source, eq));
     if let Some(previous) = sink.replace(new_sink) {
-        fade(&previous, previous.volume(), 0.0, 60);
         previous.stop();
     }
     if let Some(new_sink) = sink.as_ref() {
