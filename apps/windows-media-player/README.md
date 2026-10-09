@@ -1,6 +1,6 @@
 # Windows Media Player — проєкт (робоча назва: ZillaPlayer)
 
-> **Статус: P0 / Native UI scaffold.** Є архітектурна пропозиція, roadmap і початковий інтерфейс на Rust + Slint (Player, Downloads, Tasks, Plans). **Аудіовідтворення і downloader ще не працюють, Windows-збірка не підтверджена.** Назва продукту попередня.
+> **Статус: P1 / local playback alpha (код додано).** Є нативний інтерфейс Rust + Slint, а також реалізовані Open File, Play/Pause, Stop, Seek та гучність через фоновий аудіоворкер Rodio/CPAL. **Компіляцію й відтворення на Windows ще не перевірено**. EQ/візуалізатор поки декоративні; downloader не реалізований. Назва продукту попередня.
 
 Ця папка ізольована в гілці `apps/windows-media-player`. Гілка `main` залишається універсальним Appbootstrap. Ми свідомо **не** переносимо специфічні правила плеєра у головний шаблон.
 
@@ -14,8 +14,8 @@
 
 - Основна мова: **Rust** (кандидат, приймаємо для прототипу).
 - GUI: **Slint** (кандидат; пройти технічний + ліцензійний spike).
-- Audio output: **cpal** → WASAPI shared mode на Windows.
-- Decode: **Symphonia**; перевіряємо реальні формати та ліцензії.
+- Audio output (P1 alpha): **Rodio 0.21.1 → CPAL** → WASAPI shared mode на Windows. Далі дослідимо прямий CPAL із власним DSP callback.
+- Decode: **Symphonia через Rodio**, MP3/FLAC/WAV/OGG/M4A (фактичні файли ще потрібно протестувати).
 - DSP: власний невеликий real-time-safe audio graph, biquad EQ, gain / limiter; FFT окремим споживачем.
 - Library: **SQLite** (WAL/FTS5 за потреби), індексація у фонових потоках.
 - Downloads: **yt-dlp зовнішнім процесом**; FFmpeg/ffprobe + актуальні YouTube runtime/EJS вимоги як залежності, що перевіряються.
@@ -44,7 +44,7 @@ cd apps/windows-media-player
 cargo run
 ```
 
-Вікно поки демонструє дизайн і навігацію. Слайдери еквалайзера — UI-прототип, Play не відтворює музику, кнопка Analyze нічого не завантажує. Стан реалізації: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** EQ-візуалізація, плейлист і downloader ще демо. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
 
 ## Перший наступний крок
 
@@ -52,5 +52,5 @@ cargo run
 
 ## Статус перевірки
 
-План та UI-скелет є у GitHub. Компіляція на Windows **ще не перевірена**. Аудіовивід, real-time latency, завантажувач та інсталятор **ще не реалізовані й не тестувалися**.
+UI + базовий код аудіовідтворення додано до GitHub; компіляція на Windows і реальний аудіовивід **ще не перевірені**. DSP/FFT, завантажувач та інсталятор **ще не реалізовані**.
 
