@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "Code written != validated. Progress is not a percentage until checks run.",
+  "status_note": "Source changes for control-thread EQ coefficient snapshots and child-process lifetime are committed, but no passing Windows toolchain run or audio measurements are confirmed.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -110,8 +110,8 @@
           "id": "ZP-202",
           "title": "Move EQ coefficient design from callback into control worker",
           "priority": "blocker",
-          "status": "todo",
-          "verification": "No trig/heap/locks in audio callback"
+          "status": "implemented_unverified",
+          "verification": "Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling"
         },
         {
           "id": "ZP-203",
@@ -148,7 +148,7 @@
           "title": "Scanner subprocess, JSONL IPC and bounded UI batches",
           "priority": "high",
           "status": "implemented_unverified",
-          "verification": "Scan/cancel 50k files while audio plays; no orphan process"
+          "verification": "Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows"
         },
         {
           "id": "ZP-302",
