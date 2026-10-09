@@ -1,38 +1,44 @@
-# Audio engine — processing and playback contract
+# Audio engine — evolving implementation
 
-## Primary objective
-Bit-perfect format decoding **before intentional DSP** (not a promise of bit-perfect output with EQ enabled), uninterrupted playback and predictable user controls.
+## Current P1 alpha
+The first playable implementation uses **Rodio 0.21.1**, which builds on CPAL for device playback and Symphonia for default codecs. A dedicated Rust control thread receives Slint commands over `std::sync::mpsc`; a bounded status channel with `try_send` sends UI snapshots at 200 ms intervals.
 
-## Proposed signal path
+Current path:
+
+```
+Slint UI → mpsc Commands → audio control worker
+                             │ File::open + rodio::Decoder (Symphonia)
+                             │ Sink (play/pause/stop/seek/volume)
+                             └→ OutputStreamBuilder → CPAL → WASAPI
+Slint UI ← bounded mpsc snapshot channel ← worker
+```
+
+The current alpha does **not** yet expose raw PCM blocks or any working DSP/FFT tap. It must not be marketed as a custom low-latency audio engine until validated.
+
+## Planned P2–P4 custom DSP topology
+
 1. File selection / transport command.
-2. Probe container and codec with Symphonia.
-3. Decode in worker to PCM; validate sample rate/channels/timestamps.
-4. Convert channel layout/sample format and resample **off RT callback** when device cannot accept input format.
-5. Push into bounded preallocated SPSC audio buffer with generation/seek epoch.
-6. WASAPI shared via cpal callback: pull buffer → gain/replaygain → EQ → optional limiter → device.
-7. Tap a copy of PCM and level statistics to a bounded *droppable* analysis queue, never backpressure playback.
+2. Probe container and codec with Symphonia off UI thread.
+3. Decode worker produces PCM; validate sample rate, channel layout, timestamps.
+4. Convert channel layout/sample format and resample off time-critical callback.
+5. Push blocks into a bounded, preallocated SPSC buffer with generation/seek epoch.
+6. cpal/WASAPI callback pulls from buffer → volume/gain → preallocated EQ → limiter → device.
+7. Tap compact PCM/VU snapshots into a **droppable** ring to the FFT worker.
 
-## Transport finite state machine
-Idle → Loading → Ready → Playing ↔ Paused
-Playing → Seeking → Playing/Paused
-Any state → Stopping → Idle
-Any active state → Error → Idle/Recovering
+## Transport state and lifetime
+Idle → Playing ↔ Paused → Stopped. Open another valid file atomically replaces current track; an invalid file is rejected while current track continues. Stop retains a restartable file path in process memory.
 
-Race conditions to cover: seek while loading; stop during decode; open another file; default audio device changes mid-track; track deleted; end-of-track after paused; unsupported codec.
+Store all output stream and sink handles within the control worker and ensure they remain alive while playing. Only documented control operations are allowed across the UI thread; closing the UI terminates the command channel and audio worker.
 
-## Playback considerations
-- Prefer device-supported shared mode first; optional exclusive mode later only with careful device ownership.
-- Bound prebuffer to trade responsiveness against underruns. Profile actual buffer size.
-- Smooth seeking and volume changes; bounded ramps to prevent clicks.
-- Correct duration/timebase handling for VBR MP3 and gapless metadata where codec supports it.
-- Respect output channel count; don't assume all devices are stereo.
-- Audio callback never allocates, blocks on mutex, logs, waits for subprocess or calls filesystem/SQLite.
-- Keep DSP parameter updates immutable or snapshot-swapped at block boundaries.
+## Pending engineering validation
+- Make rustc/cargo Windows build pass with pinned dependencies and checked lockfile.
+- Exercise MP3 VBR, FLAC, WAV, seek, bad file, device absent, unplug/replug, repeated play/pause.
+- Benchmark callback deadlines, CPU, memory and dropped buffers on target hardware.
+- Add rate/channel conversion, true gapless timing, device-change recovery and prebuffer tuning.
+- Separate visualizer performance from the audio path.
 
-## Acceptance tests
-- Decode known MP3/FLAC/WAV fixtures with expected duration/channel mapping.
-- 500 repeated play/pause/seek/stop transitions on local fixtures without crashes/resource leaks.
-- Device unplug/replug and default-output changes.
-- Long playback while scanning library + visualizing + downloading.
-- No underrun in representative smoke test; **target** eight-hour soak later, measured not presumed.
-
+## Acceptance (not yet met)
+- 500 repeated play/pause/seek/stop transitions and long playback without crashes.
+- Continuous output on stable test hardware during UI interactions, library indexing and downloads.
+- No allocations/locks in any future custom real-time callbacks.
+- All claims must be supported with actual benchmark logs.
