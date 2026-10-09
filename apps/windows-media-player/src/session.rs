@@ -3,6 +3,7 @@
 //! or the Rodio output callback. This is an interim v1 session format;
 //! the full searchable library will later migrate to SQLite.
 use std::{
+    cell::RefCell,
     fs,
     io,
     path::{Path, PathBuf},
@@ -37,7 +38,7 @@ enum Message {
 pub struct SessionStore {
     updates: Receiver<Result<SavedSession, String>>,
     sender: Sender<Message>,
-    worker: Option<JoinHandle<()>>,
+    worker: RefCell<Option<JoinHandle<()>>>,
 }
 
 impl SessionStore {
@@ -70,7 +71,7 @@ impl SessionStore {
                     }
                 }
             })?;
-        Ok(Self { updates, sender, worker: Some(worker) })
+        Ok(Self { updates, sender, worker: RefCell::new(Some(worker)) })
     }
 
     pub fn poll_loaded(&self) -> Option<Result<SavedSession, String>> {
@@ -81,10 +82,10 @@ impl SessionStore {
         let _ = self.sender.send(Message::Save(session.sanitized()));
     }
 
-    pub fn shutdown(mut self, latest: SavedSession) {
+    pub fn shutdown(&self, latest: SavedSession) {
         self.enqueue_save(latest);
         let _ = self.sender.send(Message::Shutdown);
-        if let Some(worker) = self.worker.take() { let _ = worker.join(); }
+        if let Some(worker) = self.worker.borrow_mut().take() { let _ = worker.join(); }
     }
 }
 
