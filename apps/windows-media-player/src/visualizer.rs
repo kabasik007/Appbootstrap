@@ -9,7 +9,7 @@ use rustfft::{num_complex::Complex32, FftPlanner};
 use std::{
     f32::consts::PI,
     sync::{
-        atomic::{AtomicU32, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         Arc,
     },
     thread,
@@ -23,6 +23,7 @@ const HOP: usize = 1024;
 /// UI reads snapshots without sharing locks with the sound device.
 pub struct Spectrum {
     revision: AtomicU64,
+    audible: AtomicBool,
     levels: [AtomicU32; BANDS],
 }
 
@@ -30,6 +31,7 @@ impl Spectrum {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             revision: AtomicU64::new(0),
+            audible: AtomicBool::new(false),
             levels: std::array::from_fn(|_| AtomicU32::new(0)),
         })
     }
@@ -53,7 +55,16 @@ impl Spectrum {
         }
     }
 
+    /// Hide stale display frames when transport is paused, stopped or idle.
+    /// Visual data remains lossy; no UI callbacks enter the audio mixer.
+    pub fn set_audible(&self, playing: bool) {
+        self.audible.store(playing, Ordering::Relaxed);
+    }
+
     pub fn read(&self) -> [f32; BANDS] {
+        if !self.audible.load(Ordering::Relaxed) {
+            return [0.0; BANDS];
+        }
         std::array::from_fn(|index| {
             let value = f32::from_bits(self.levels[index].load(Ordering::Relaxed));
             if value.is_finite() { value.clamp(0.0, 100.0) } else { 0.0 }
@@ -210,12 +221,26 @@ mod tests {
     fn old_generation_cannot_overwrite_active_display() {
         let spectrum = Spectrum::new();
         let old = spectrum.start_track();
+        spectrum.set_audible(true);
         spectrum.publish(old, &[50.0; BANDS]);
         let new = spectrum.start_track();
         spectrum.publish(old, &[100.0; BANDS]);
         assert!(spectrum.read().iter().all(|v| *v == 0.0));
         spectrum.publish(new, &[42.0; BANDS]);
         assert!(spectrum.read().iter().all(|v| *v == 42.0));
+    }
+
+    #[test]
+    fn paused_spectrum_hides_stale_levels() {
+        let spectrum = Spectrum::new();
+        let track = spectrum.start_track();
+        spectrum.set_audible(true);
+        spectrum.publish(track, &[70.0; BANDS]);
+        assert!(spectrum.read().iter().all(|value| *value > 0.0));
+        spectrum.set_audible(false);
+        assert!(spectrum.read().iter().all(|value| *value == 0.0));
+        spectrum.set_audible(true);
+        assert!(spectrum.read().iter().all(|value| *value == 70.0));
     }
 
     #[test]
