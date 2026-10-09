@@ -1,9 +1,11 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod audio;
+mod decode_worker;
 mod dsp;
 mod library;
 mod playback;
+mod pcm_ring;
 mod playlist;
 mod queue;
 mod roadmap;
