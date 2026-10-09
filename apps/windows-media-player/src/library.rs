@@ -109,10 +109,11 @@ mod tests {
     }
     #[test]
     fn scanner_protocol_round_trip_handles_unicode_and_newlines() {
-        let path = "C:\\\\Music\\Привіт 🎵\\strange\\nname.mp3";
+        let path = "C:/Music/Привіт 🎵/strange\nname.mp3";
         let json = serde_json::to_string(&Some(path.to_owned())).unwrap();
         let parsed: Option<String> = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.as_deref(),Some(path));
-        assert!(!json.contains('\\n')); // JSON line must not contain physical newlines
+        assert_eq!(parsed.as_deref(), Some(path));
+        assert!(!json.contains('\n')); // No literal newline in JSONL records
+        assert!(json.contains("\\n")); // Escaped newline survives serialization
     }
 }
