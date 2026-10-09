@@ -2,6 +2,7 @@
 //! worker thread; the Rodio output source consumes only prebuffered f32 samples.
 //! Seeking recreates the worker at a new position from the AUDIO CONTROL thread.
 use crate::pcm_ring::PcmRing;
+use crate::visualizer::{self, Spectrum, VisualTap};
 use rodio::{ChannelCount, Decoder, SampleRate, Source};
 use std::{
     fs::File,
@@ -35,7 +36,7 @@ impl Drop for FinishOnDrop {
 
 /// Blocking function called ONLY on the audio control thread, never Slint.
 /// Timeouts keep the command worker from waiting indefinitely on slow disks.
-pub fn prepare(path: PathBuf, position: Duration) -> Result<PreparedAudio, String> {
+pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Result<PreparedAudio, String> {
     let (tx, rx) = mpsc::sync_channel::<Result<TrackInfo, String>>(1);
     thread::Builder::new()
         .name("zillaplayer-decode-worker".into())
@@ -99,6 +100,7 @@ pub fn prepare(path: PathBuf, position: Duration) -> Result<PreparedAudio, Strin
         thread::sleep(Duration::from_millis(3));
     }
 
+    let visual_tap = visualizer::attach(spectrum, info.sample_rate.get(), info.channels.get());
     let cancel = Arc::clone(&info.ring);
     let duration = info.duration;
     Ok(PreparedAudio {
@@ -110,6 +112,7 @@ pub fn prepare(path: PathBuf, position: Duration) -> Result<PreparedAudio, Strin
             underflow_samples: 0,
             analysis_samples: 0,
             peak_window: 0.0,
+            visual_tap,
         },
         cancel,
         duration,
@@ -127,6 +130,7 @@ pub struct BufferedPcmSource {
     underflow_samples: u32,
     analysis_samples: u16,
     peak_window: f32,
+    visual_tap: Option<VisualTap>,
 }
 impl Iterator for BufferedPcmSource {
     type Item = f32;
@@ -134,6 +138,7 @@ impl Iterator for BufferedPcmSource {
     fn next(&mut self) -> Option<f32> {
         if let Some(sample) = self.ring.try_pop() {
             self.underflow_samples = 0;
+            if let Some(tap) = self.visual_tap.as_mut() { tap.sample(sample); }
             self.peak_window = self.peak_window.max(sample.abs());
             self.analysis_samples += 1;
             if self.analysis_samples >= 1024 {
@@ -164,7 +169,10 @@ impl Source for BufferedPcmSource {
     fn total_duration(&self) -> Option<Duration> { self.duration }
 }
 impl Drop for BufferedPcmSource {
-    fn drop(&mut self) { self.ring.cancel(); }
+    fn drop(&mut self) {
+        self.ring.cancel();
+        if let Some(tap) = &self.visual_tap { tap.cancel(); }
+    }
 }
 
 #[cfg(test)]
@@ -183,6 +191,7 @@ mod tests {
             underflow_samples: 0,
             analysis_samples: 0,
             peak_window: 0.0,
+            visual_tap: None,
         };
         assert_eq!(source.next(), Some(0.0));
         ring.try_push(0.5).unwrap();
@@ -220,7 +229,7 @@ mod tests {
         }
         fs::write(&path, wav).unwrap();
 
-        let mut prepared = prepare(path.clone(), Duration::ZERO)
+        let mut prepared = prepare(path.clone(), Duration::ZERO, Spectrum::new())
             .expect("generated WAV should be accepted by the decoder");
         assert_eq!(prepared.source.channels.get(), 1);
         assert_eq!(prepared.source.sample_rate.get(), 44_100);
@@ -247,6 +256,7 @@ mod tests {
             underflow_samples: 0,
             analysis_samples: 0,
             peak_window: 0.0,
+            visual_tap: None,
         };
         for _ in 0..1024 { assert_eq!(source.next(), Some(0.65)); }
         assert!((ring.peak_percent() - 65.).abs() < 0.001);
@@ -264,6 +274,7 @@ mod tests {
                 underflow_samples: 0,
                 analysis_samples: 0,
                 peak_window: 0.0,
+                visual_tap: None,
             };
         }
         assert!(ring.is_canceled());
