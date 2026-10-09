@@ -45,19 +45,25 @@ pub fn write(path: &Path, tracks: &[PathBuf]) -> io::Result<()> {
     if tracks.len() > MAX_TRACKS {
         return Err(io::Error::new(io::ErrorKind::InvalidInput, "Too many playlist entries"));
     }
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent)?;
     let tmp = path.with_extension("m3u8.tmp");
     let backup = path.with_extension("m3u8.bak");
     let result = (|| -> io::Result<()> {
         let mut file = BufWriter::new(File::create(&tmp)?);
         writeln!(file, "#EXTM3U")?;
+        let mut length = "#EXTM3U\n".len();
         for track in tracks {
             let line = track.to_string_lossy();
             // Newlines would inject additional playlist entries. Windows normally
             // forbids them; explicitly reject on all operating systems.
             if line.contains('\n') || line.contains('\r') {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "Newline in track path"));
+            }
+            length = length.saturating_add(line.len() + 1);
+            if length as u64 > MAX_PLAYLIST_BYTES {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "Export exceeds 16 MiB"));
             }
             writeln!(file, "{line}")?;
         }
@@ -96,6 +102,18 @@ mod tests {
     fn ignores_empty_and_metadata_lines() {
         let output = parse(Cursor::new("#EXTM3U\n#EXTINF:30,test\n\nx.wav\n"), Path::new("list.m3u")).unwrap();
         assert_eq!(output.len(), 1);
+    }
+
+    #[test]
+    fn m3u_round_trip_preserves_unicode() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!("zillaplayer-list-{}-{unique}.m3u8", std::process::id()));
+        let original = vec![path.with_file_name("Пісня.mp3"),
+                            path.with_file_name("album.flac")];
+        write(&path, &original).unwrap();
+        assert_eq!(read(&path).unwrap(), original);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
