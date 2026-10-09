@@ -4,7 +4,7 @@
 //! vertical slice. Custom callback-safe DSP and FFT remain separate P2/P4 tasks.
 use crate::dsp::{EqControls, EqSource};
 use crate::playback::{
-    format_duration, media_title, normalise_volume, seek_position, PlaybackState, Transport,
+    fade_weight, format_duration, media_title, normalise_volume, seek_position, PlaybackState, Transport,
 };
 use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink, Source};
 use std::fs::File;
@@ -244,7 +244,7 @@ fn fade(sink: &Sink, start: f32, finish: f32, milliseconds: u64) {
     for step in 1..=STEPS {
         let t = step as f32 / STEPS as f32;
         // Raised cosine envelope has zero slope at both ends.
-        let weight = (1.0 - (std::f32::consts::PI * t).cos()) * 0.5;
+        let weight = fade_weight(t);
         sink.set_volume(start + (finish - start) * weight);
         thread::sleep(Duration::from_millis(milliseconds / STEPS));
     }
