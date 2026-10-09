@@ -217,6 +217,9 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>, s
                 }
             }
         }
+        // Snapshot is false when paused or stopped, so old spectrum bars are
+        // hidden even if the analysis worker is still draining buffered PCM.
+        spectrum.set_audible(state.transport == Transport::Playing && sink.is_some());
         state.buffer_starvations = decoder.as_ref().map_or(0, |buffer| buffer.underruns());
         state.audio_level_percent = if state.transport == Transport::Playing {
             decoder.as_ref().map_or(0.0, |buffer| buffer.peak_percent())
