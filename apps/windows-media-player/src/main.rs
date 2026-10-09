@@ -294,6 +294,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             window.set_playing(state.transport == Transport::Playing);
             window.set_has_track(state.has_track);
             window.set_progress_percent(state.progress_percent());
+            window.set_audio_level(state.audio_level_percent);
             window.set_elapsed_text(format_duration(state.position).into());
             window.set_duration_text(state.duration.map(format_duration).unwrap_or_else(|| "--:--".into()).into());
             window.set_notice(audio::status_text(&state).into());
