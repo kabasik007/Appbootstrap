@@ -39,6 +39,21 @@ jobs:
         run: cargo test
       - name: Build release executable
         run: cargo build --release
+      - name: Smoke-test scanner in actual Windows child-process mode
+        shell: pwsh
+        run: |
+          $folder = Join-Path $env:RUNNER_TEMP "zillaplayer-scan-fixture"
+          New-Item -ItemType Directory -Force -Path $folder | Out-Null
+          [System.IO.File]::WriteAllText((Join-Path $folder "alpha.MP3"), "fixture")
+          [System.IO.File]::WriteAllText((Join-Path $folder "beta.flac"), "fixture")
+          [System.IO.File]::WriteAllText((Join-Path $folder "ignore.txt"), "fixture")
+          $exe = Join-Path $PWD "target/release/zillaplayer.exe"
+          $lines = @(& $exe --scan-worker $folder)
+          if ($LASTEXITCODE -ne 0) { throw "scanner subprocess returned $LASTEXITCODE" }
+          $decoded = @($lines | ForEach-Object { $_ | ConvertFrom-Json })
+          if ($decoded.Count -ne 2) { throw "expected 2 media files, got $($decoded.Count)" }
+          if (-not ($decoded | Where-Object { $_ -like "*alpha.MP3" })) { throw "missing MP3" }
+          if (-not ($decoded | Where-Object { $_ -like "*beta.flac" })) { throw "missing FLAC" }
       - name: Upload unsigned development build
         uses: actions/upload-artifact@v4
         with:
