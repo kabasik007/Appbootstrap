@@ -67,6 +67,12 @@ impl PlaybackState {
     }
 }
 
+/// A zero-slope envelope at both ends for seek/pause/track changes.
+pub fn fade_weight(t: f32) -> f32 {
+    let t = if t.is_finite() { t.clamp(0.,1.) } else { 0. };
+    (1.0 - (std::f32::consts::PI * t).cos()) * 0.5
+}
+
 pub fn normalise_volume(percent: f32) -> f32 {
     if percent.is_finite() {
         (percent / 100.0).clamp(0.0, 1.0)
@@ -107,6 +113,19 @@ pub fn format_duration(duration: Duration) -> String {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn fade_has_soft_edges_and_is_monotonic() {
+        assert!(fade_weight(0.0).abs()<1e-6);
+        assert!((fade_weight(1.0)-1.).abs()<1e-6);
+        let mut before = -1.;
+        for i in 0..=100 {
+            let value = fade_weight(i as f32 / 100.);
+            assert!(value >= before);
+            before = value;
+        }
+        assert_eq!(fade_weight(f32::NAN), 0.);
+    }
 
     #[test]
     fn progress_is_bounded() {
