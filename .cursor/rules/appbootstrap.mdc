@@ -1,0 +1,6 @@
+---
+description: Universal Appbootstrap engineering rules
+alwaysApply: true
+---
+Read `AGENTS.md` first. Follow documented scope, architectural boundaries, performance budgets, security expectations and actual test results. Do not impose a language or framework; obey the selected project profile in `docs/PROJECT_PROFILE.md`.
+
