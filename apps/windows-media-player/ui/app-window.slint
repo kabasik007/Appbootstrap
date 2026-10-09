@@ -33,6 +33,7 @@ component TrackLine inherits Rectangle {
     in property <string> number;
     in property <string> title;
     in property <string> artist;
+    callback activated;
     height: 43px;
     background: #102039;
     border-radius: 6px;
@@ -47,6 +48,7 @@ component TrackLine inherits Rectangle {
             Text { text: root.artist; font-size: 11px; color: #8ea6c9; }
         }
     }
+    TouchArea { clicked => { root.activated(); } }
 }
 
 export component AppWindow inherits Window {
@@ -71,6 +73,19 @@ export component AppWindow inherits Window {
     callback stop-playback;
     callback seek-to(float);
     callback set-volume(float);
+    callback open-folder;
+    callback play-library-track(int);
+    callback previous-track;
+    callback next-track;
+    callback set-eq-band(int, float);
+    callback set-bass(float);
+    callback set-treble(float);
+    callback set-loudness(bool);
+    callback enable-eq(bool);
+    in-out property <[string]> library-items: [];
+    in-out property <string> library-count: "0 tracks";
+    in-out property <bool> equalizer-enabled: true;
+    in-out property <bool> loudness-enabled: false;
 
     HorizontalLayout {
         spacing: 0px;
@@ -169,8 +184,11 @@ export component AppWindow inherits Window {
                                                 HorizontalLayout {
                                                     spacing: 8px;
                                                     Button { text: "Open File"; clicked => { root.open-file(); } }
+                                                    Button { text: "Folder"; clicked => { root.open-folder(); } }
                                                     Button { text: root.playing ? "❚❚ Pause" : "▶ Play"; enabled: root.has-track; clicked => { root.toggle-play(); } }
                                                     Button { text: "■ Stop"; enabled: root.has-track; clicked => { root.stop-playback(); } }
+                                                    Button { text: "◀"; clicked => { root.previous-track(); } }
+                                                    Button { text: "▶"; clicked => { root.next-track(); } }
                                                     Rectangle { horizontal-stretch: 1; background: #102039; }
                                                 }
                                                 Slider {
@@ -196,11 +214,11 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 padding: 12px;
                                                 spacing: 7px;
-                                                Text { text: "PLAYLIST  /  QUEUE"; color: #f2f7ff; font-size: 16px; font-weight: 700; }
-                                                TrackLine { number: "01"; title: "Neon Tides"; artist: "Solaris Drive"; }
-                                                TrackLine { number: "02"; title: "Echoes in Parallel"; artist: "Lume"; }
-                                                TrackLine { number: "03"; title: "Gravity Well"; artist: "CYAN"; }
-                                                TrackLine { number: "04"; title: "Midnight Protocol"; artist: "Tessera"; }
+                                                Text { text: "PLAYLIST  /  " + root.library-count; color: #f2f7ff; font-size: 15px; font-weight: 700; }
+                                                for file[i] in root.library-items : TrackLine {
+                                                    number: "♫"; title: file; artist: "Local audio";
+                                                    activated => { root.play-library-track(i); }
+                                                }
                                             }
                                         }
                                     }
@@ -239,22 +257,23 @@ export component AppWindow inherits Window {
                                                 horizontal-stretch: 1;
                                                 spacing: 8px;
                                                 HorizontalLayout {
-                                                    Text { text: "EQUALIZER  /  10 BAND  ·  DSP COMING IN P2"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Text { text: "GRAPHIC EQ / 15 OF 31 BANDS"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
                                                     Rectangle { horizontal-stretch: 1; }
                                                     Text { text: "Electronic preset · UI only"; color: #59beff; font-size: 12px; }
                                                 }
                                                 HorizontalLayout {
                                                     spacing: 4px;
                                                     alignment: center;
-                                                    for hz[i] in ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"] : VerticalLayout {
-                                                        width: 54px;
+                                                    for hz[i] in ["20","31","50","80","125","200","315","500","800","1.25k","2k","3.15k","5k","10k","20k"] : VerticalLayout {
+                                                        width: 36px;
                                                         spacing: 6px;
                                                         Slider {
                                                             orientation: vertical;
                                                             minimum: -12;
                                                             maximum: 12;
-                                                            value: (i - 4) * 0.7;
+                                                            value: 0;
                                                             height: 132px;
+                                                            changed(v) => { root.set-eq-band(i,v); }
                                                         }
                                                         Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 12px; }
                                                     }
@@ -265,16 +284,25 @@ export component AppWindow inherits Window {
                                                 width: 190px;
                                                 spacing: 10px;
                                                 Text { text: "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
-                                                Text { text: "Output Volume"; color: #9ab7d5; font-size: 12px; }
+                                                Text { text: "Master Volume"; color: #9ab7d5; font-size: 12px; }
                                                 Slider {
                                                     minimum: 0;
                                                     maximum: 100;
                                                     value: root.volume-percent;
                                                     changed(percent) => { root.set-volume(percent); }
                                                 }
-                                                Button { text: "Bass Boost"; clicked => { root.notice = "DSP control — UI preview"; } }
-                                                Button { text: "Loudness"; clicked => { root.notice = "DSP control — UI preview"; } }
-                                                Button { text: "DSP Presets"; clicked => { root.notice = "DSP presets — planned for P2"; } }
+                                                Text { text: "Bass"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-bass(v); } }
+                                                Text { text: "Treble / Tone"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-treble(v); } }
+                                                Button { text: root.loudness-enabled ? "Loud: ON" : "Loud: OFF"; clicked => {
+                                                    root.loudness-enabled = !root.loudness-enabled;
+                                                    root.set-loudness(root.loudness-enabled);
+                                                } }
+                                                Button { text: root.equalizer-enabled ? "EQ: ON" : "EQ: BYPASS"; clicked => {
+                                                    root.equalizer-enabled = !root.equalizer-enabled;
+                                                    root.enable-eq(root.equalizer-enabled);
+                                                } }
                                             }
                                         }
                                     }
@@ -426,9 +454,19 @@ export component AppWindow inherits Window {
                                 if root.active-page == "Library" : VerticalLayout {
                                     spacing: 15px;
                                     Text { text: "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "Folder indexing, tracks, albums and playlists are scheduled for P3."; color: #91b1d5; font-size: 17px; }
-                                    Button { text: "Browse music (not connected)"; clicked => { root.notice = "Library scanner has not been implemented"; } }
-                                    Rectangle { vertical-stretch: 1; background: #102039; border-radius: 12px; }
+                                    Text { text: "Folder scan in a separate child process; playback stays responsive"; color: #91b1d5; font-size: 17px; }
+                                    Button { text: "Scan Music Folder"; clicked => { root.open-folder(); } }
+                                    Text { text: root.library-count + " indexed (first 10 shown)"; color: #4dc1ff; font-size: 15px; }
+                                    Rectangle {
+                                        vertical-stretch: 1; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 16px; spacing: 5px;
+                                            for file[i] in root.library-items : TrackLine {
+                                                number: "♫"; title: file; artist: "Click to play";
+                                                activated => { root.play-library-track(i); }
+                                            }
+                                        }
+                                    }
                                 }
                                 if root.active-page == "Settings" : VerticalLayout {
                                     spacing: 15px;
