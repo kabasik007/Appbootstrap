@@ -78,6 +78,7 @@ export component AppWindow inherits Window {
     callback previous-track;
     callback next-track;
     callback set-eq-band(int, float);
+    callback set-preamp(float);
     callback set-bass(float);
     callback set-treble(float);
     callback set-loudness(bool);
@@ -248,7 +249,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     Rectangle {
-                                        height: 292px;
+                                        height: 312px;
                                         background: #102039;
                                         border-radius: 12px;
                                         HorizontalLayout {
@@ -285,6 +286,8 @@ export component AppWindow inherits Window {
                                                 width: 190px;
                                                 spacing: 10px;
                                                 Text { text: "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
+                                                Text { text: "Preamp / Headroom"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -18; maximum: 6; value: -6; changed(v) => { root.set-preamp(v); } }
                                                 Text { text: "Master Volume"; color: #9ab7d5; font-size: 12px; }
                                                 Slider {
                                                     minimum: 0;
