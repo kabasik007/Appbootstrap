@@ -5,6 +5,7 @@ mod dsp;
 mod library;
 mod playback;
 mod queue;
+mod roadmap;
 
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
@@ -29,6 +30,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let ui = AppWindow::new()?;
+    // Plan and engineering backlog share one validated, versioned source.
+    // "CODE / UNVERIFIED" is distinct from "VERIFIED".
+    let plan = roadmap::bundled().map_err(std::io::Error::other)?;
+    ui.set_roadmap_summary(plan.milestone_summary.into());
+    ui.set_task_summary(plan.task_summary.into());
+    ui.set_next_gate(plan.next_gate.into());
+    let milestone_model: Rc<VecModel<SharedString>> = Rc::new(
+        VecModel::from(plan.milestones.into_iter().map(SharedString::from).collect::<Vec<_>>())
+    );
+    let task_model: Rc<VecModel<SharedString>> = Rc::new(
+        VecModel::from(plan.focus_tasks.into_iter().map(SharedString::from).collect::<Vec<_>>())
+    );
+    ui.set_roadmap_items(milestone_model.into());
+    ui.set_focus_tasks(task_model.into());
     let AudioController { commands, updates } = start_audio_worker();
     let scanner = Rc::new(LibraryScanner::new());
     let scan_serial = Rc::new(Cell::new(0u64));
