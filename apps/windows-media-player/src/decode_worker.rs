@@ -108,6 +108,8 @@ pub fn prepare(path: PathBuf, position: Duration) -> Result<PreparedAudio, Strin
             sample_rate: info.sample_rate,
             duration,
             underflow_samples: 0,
+            analysis_samples: 0,
+            peak_window: 0.0,
         },
         cancel,
         duration,
@@ -123,6 +125,8 @@ pub struct BufferedPcmSource {
     sample_rate: SampleRate,
     duration: Option<Duration>,
     underflow_samples: u32,
+    analysis_samples: u16,
+    peak_window: f32,
 }
 impl Iterator for BufferedPcmSource {
     type Item = f32;
@@ -130,13 +134,24 @@ impl Iterator for BufferedPcmSource {
     fn next(&mut self) -> Option<f32> {
         if let Some(sample) = self.ring.try_pop() {
             self.underflow_samples = 0;
+            self.peak_window = self.peak_window.max(sample.abs());
+            self.analysis_samples += 1;
+            if self.analysis_samples >= 1024 {
+                self.ring.set_peak_level(self.peak_window);
+                self.analysis_samples = 0;
+                self.peak_window = 0.0;
+            }
             return Some(sample);
         }
-        if self.ring.is_drained() || self.ring.is_canceled() { return None; }
+        if self.ring.is_drained() || self.ring.is_canceled() {
+            self.ring.set_peak_level(0.0);
+            return None;
+        }
         // Count underruns once per 256 silent samples, not at audio sample rate.
         self.underflow_samples += 1;
         if self.underflow_samples >= 256 {
             self.ring.note_underrun();
+            self.ring.set_peak_level(0.0);
             self.underflow_samples = 0;
         }
         Some(0.0)
@@ -166,6 +181,8 @@ mod tests {
             sample_rate: NonZeroU32::new(44_100).unwrap(),
             duration: Some(Duration::from_secs(10)),
             underflow_samples: 0,
+            analysis_samples: 0,
+            peak_window: 0.0,
         };
         assert_eq!(source.next(), Some(0.0));
         ring.try_push(0.5).unwrap();
@@ -228,6 +245,8 @@ mod tests {
                 sample_rate: NonZeroU32::new(48_000).unwrap(),
                 duration: None,
                 underflow_samples: 0,
+                analysis_samples: 0,
+                peak_window: 0.0,
             };
         }
         assert!(ring.is_canceled());
