@@ -217,6 +217,7 @@ export component AppWindow inherits Window {
                                                 Text { text: "PLAYLIST  /  " + root.library-count; color: #f2f7ff; font-size: 15px; font-weight: 700; }
                                                 for file[i] in root.library-items : TrackLine {
                                                     number: "♫"; title: file; artist: "Local audio";
+                                                    visible: i < 4;
                                                     activated => { root.play-library-track(i); }
                                                 }
                                             }
@@ -247,7 +248,7 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     Rectangle {
-                                        height: 253px;
+                                        height: 292px;
                                         background: #102039;
                                         border-radius: 12px;
                                         HorizontalLayout {
