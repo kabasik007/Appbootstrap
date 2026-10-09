@@ -25,6 +25,9 @@
 
 ## Документація
 - [Roadmap](ROADMAP.md) — порядок розробки, критерії прийняття, ризики.
+- [Live Roadmap & 34 задачі](roadmap/STATUS.md) — актуальні статуси P0–P7, пріоритети, умови прийняття.
+- [Roadmap JSON](roadmap/roadmap.json) — єдине джерело для екранів Plans / Tasks та документації.
+- [Roadmap generator](tools/roadmap_sync.py) — перевірка формату й синхронності через CI.
 - [Специфікація продукту](docs/PRODUCT_SPEC.md).
 - [Архітектура](docs/ARCHITECTURE.md).
 - [Аудіоядро](docs/AUDIO_ENGINE.md).
@@ -45,6 +48,15 @@ cargo run
 ```
 
 В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** Є 31-смуговий DSP-процесор і керування басом/тембром/гучністю, сканування папок через кнопку Folder. Візуалізація та downloader поки демо. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
+
+## Roadmap в самому застосунку
+
+Вкладки **Plans** та **Tasks** тепер формують свої рядки з файлу `roadmap/roadmap.json`, вбудованого в бінарник. Плани відображають 8 етапів, Tasks показує пріоритетні 8 із 34 задач. Статус `implemented_unverified` означає **код написаний, збірка/тести не підтверджені**, а не готову функцію. Після правки JSON запускаємо:
+
+```powershell
+python tools/roadmap_sync.py --write
+python tools/roadmap_sync.py --check
+```
 
 ## Перший наступний крок
 
