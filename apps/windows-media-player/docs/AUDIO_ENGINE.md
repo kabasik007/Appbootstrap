@@ -1,34 +1,67 @@
-# Audio engine — current and target
+# Audio Engine 2.0 — separated decoder and bounded PCM path
 
-## Current P1/P2 code (unverified on Windows)
+**Status (2026-10-10): implementation in GitHub; not yet compiled or listened to on Windows.**
 
-Slint UI sends commands to an audio CONTROL worker using mpsc. That worker owns Rodio Sink/OutputStream handles, performs user-requested pause/resume, stop, local file open and seek, and applies raised-cosine fades (about 50–70 ms) to avoid abrupt changes. A bounded channel sends playback snapshots back to the Slint UI timer.
+## Current path
 
-Audio source wraps Rodio Decoder in the ZillaPlayer EqSource adapter. EQ uses 31 peaking bands with per-channel state and smoothed coefficient changes, bass/treble shelves, a loudness contour and an optional bypass. Main UI controls 15 of the 31 EQ bands; 31-band advanced editor and saved presets remain pending.
+```text
+Slint UI  --transport commands--> Audio Control Thread
+                                  |           |
+                                  |           +-- EQ coefficients (atomic revisioned snapshot)
+                                  |           +-- WASAPI device / Rodio Sink / gain fades
+                                  |
+                                  +-- start/cancel decoder worker on Open or Seek
+                                          |
+                                          +-- File::open / Symphonia decode / optional seek
+                                          |
+                                          +-- bounded SPSC ring (AtomicU32 f32 samples)
+                                                  |
+Rodio source <- BufferedPcmSource::next() <- try_pop() <-+
+        |
+        +-- 31-band EQ / bass / treble / loudness / preamp
+        |
+        +-- CPAL → Windows WASAPI
+```
 
-## Important hard real-time caveat
+No disk read, decoder call or blocking wait occurs in `BufferedPcmSource::next()`. That method consumes one predecoded f32 sample from the atomic SPSC ring. If empty and the decoder is still running, it returns zero rather than stalling the mixer; when decoding finishes and the ring drains, it returns EOF. An atomic counter tracks prolonged starvation windows (256 missing samples) and appears in the player status.
 
-The existing Rodio Source is still consumed on the audio mixing/output path. Decoding or I/O *might* happen during output callbacks: the control worker only isolates device setup and transport commands. EQ parameter refresh now copies prepared atomic coefficients; trigonometric coefficient generation runs on the control thread. Do not claim this is completely non-blocking or hard RT safe.
+## Buffering and ownership
 
-## Target after Windows build is verified
+- Producer: exactly one decode worker, performs all filesystem/codec reads.
+- Consumer: one Rodio source, reads only preallocated atomic sample slots.
+- Memory: requested ring size is two seconds of interleaved samples, rounded to a power of two and clamped to 4,096–1,048,576 samples (maximum ~4 MiB of sample storage per active track).
+- The audio control thread waits for a bounded metadata response (up to four seconds) and at most 350 ms for prebuffering. This **never blocks the Slint UI thread**, but opening a slow file can delay a new transport command.
+- Open/restart/seek create a new decoder generation; old ring is explicitly canceled after successful track replacement. Drops cancel their decoder. The reader flushes naturally by abandoning the canceled buffer, not by manipulating ring indices concurrently.
+- Paused playback may fill the ring; the producer then waits with bounded sleeps. This is on its own worker only.
+- Current prebuffer target is 100 ms; actual startup and underrun behavior need measurements.
 
-    Slint → asynchronous control commands
-               ↓
-    decode worker with disk reads and seek generation
-               ↓
-    preallocated bounded SPSC PCM ring
-               ↓
-    CPAL/WASAPI output callback (no allocations, blocking I/O or mutexes)
-               ↓
-    prebuilt EQ coeff snapshots + gain envelope → output
-               └→ loss-tolerant FFT analysis worker → throttled UI
+## Seek and soft transitions
 
-Filter coefficient creation has now been moved to the audio-control worker and shared through an atomic revisioned snapshot; the decoder still needs isolation before the callback can be considered real-time-safe. Test seek cancellation and stale data discard with generation counters. Measure underruns, latency, memory, CPU and concurrent folder scanning on a real Windows system.
+A seek is implemented by preparing a new decoder at the requested timestamp, then fading/pausing the old Sink and switching to the prebuffered source. Existing audio is kept if the new file/seek fails. Raised-cosine gain ramps execute on the audio **control** thread, not in the output callback. Seek changes track position base so UI reports duration correctly after restarting the decoder.
 
-## Tests needed before release
+## DSP
 
-- Windows cargo check, cargo test, release build and MP3/FLAC/WAV fixtures
-- 500 rapid seek/pause/track transitions
-- Eight-hour playback soak with 50k music files being indexed
-- Device unplug/replug, corrupt media and invalid/remote folder
-- Smooth audible fade without clicks and real effect from every 31-band setting
+EQ coefficients are prepared on the control thread, then published as an atomic revisioned snapshot. The mixer reads a consistent copy at most once per 128 audio frames. Per-channel Biquad state, gain envelope and output clipping protection remain on the mixer source. **The EQ is not yet acoustically validated**; future work includes frequency-response tests, noise/denormal profiling, better coefficient interpolation and limiter/gain-staging tests.
+
+## Limits / technical debt
+
+- Correctness of Windows compilation, Rodio/Slint API integration, audio sound quality and underrun budgets is **not yet confirmed**.
+- Current transport command channel is unbounded. Rapid repeated seeking can enqueue too many decoder restarts; coalescing/cancellation remains P1 work.
+- Every seek opens a fresh file decoder; seek startup is not zero-cost.
+- Output latency/starvation silence can affect observed playback clock timing. Instrument decoded vs emitted frames in a future iteration.
+- Variable sample-rate/channel-layout tracks are not modeled across stream spans; test and handle transitions.
+- Hardware device removal/recovery, gapless playback, limiter and live FFT remain on the roadmap.
+- Rust worker tests are present, but their **passing outcomes are not yet established** until Cargo CI runs.
+
+## Verification
+
+From `apps/windows-media-player` on Windows with Rust stable/MSVC:
+
+```powershell
+cargo check
+cargo test
+cargo build --release
+cargo run
+```
+
+Unit tests cover ring FIFO/wraparound/cancellation/EOF, generated WAV decoding by the worker, DSP finite samples, control-thread parameter updates, playlist formats and scan subprocess logic. Manual checks must cover MP3/FLAC/WAV playing, rapid seeks, long folder scans while listening, sample rate changes, click-free fades, CPU/memory and audio device unplug.
