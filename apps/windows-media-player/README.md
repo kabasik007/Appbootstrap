@@ -1,6 +1,6 @@
 # Windows Media Player — проєкт (робоча назва: ZillaPlayer)
 
-> **Статус: P1 / local playback alpha (код додано).** Є нативний інтерфейс Rust + Slint, а також реалізовані Open File, Play/Pause, Stop, Seek та гучність через фоновий аудіоворкер Rodio/CPAL. **Компіляцію й відтворення на Windows ще не перевірено**. EQ/візуалізатор поки декоративні; downloader не реалізований. Назва продукту попередня.
+> **Статус: P1/P2 / джерельний код прототипу.** Є нативний інтерфейс Rust + Slint, код локального відтворення, багатосмуговий DSP та сканування папок в окремому підпроцесі. **Компіляцію й відтворення на Windows ще не перевірено.** Спектроаналізатор поки декоративний; downloader не реалізований. Назва продукту попередня.
 
 Ця папка ізольована в гілці `apps/windows-media-player`. Гілка `main` залишається універсальним Appbootstrap. Ми свідомо **не** переносимо специфічні правила плеєра у головний шаблон.
 
@@ -16,8 +16,8 @@
 - GUI: **Slint** (кандидат; пройти технічний + ліцензійний spike).
 - Audio output (P1 alpha): **Rodio 0.21.1 → CPAL** → WASAPI shared mode на Windows. Далі дослідимо прямий CPAL із власним DSP callback.
 - Decode: **Symphonia через Rodio**, MP3/FLAC/WAV/OGG/M4A (фактичні файли ще потрібно протестувати).
-- DSP: власний невеликий real-time-safe audio graph, biquad EQ, gain / limiter; FFT окремим споживачем.
-- Library: **SQLite** (WAL/FTS5 за потреби), індексація у фонових потоках.
+- DSP: додано модуль 31-смугового Biquad EQ (15 смуг видно у компактному інтерфейсі), бас, тембр, loudness, bypass. Повністю hard-real-time-safe аудіоядро ще потребує відокремлення декодера та розрахунків коефіцієнтів від callback.
+- Library: зараз **окремий Windows-підпроцес для сканування**, JSONL IPC, bounded channels і список до 50 тис. треків у RAM. SQLite, метадані та постійне збереження — наступні етапи.
 - Downloads: **yt-dlp зовнішнім процесом**; FFmpeg/ffprobe + актуальні YouTube runtime/EJS вимоги як залежності, що перевіряються.
 - Плагіни: власні вбудовані інтерфейси на старті, розширення зовнішніми адаптерами після визначення ABI / безпеки.
 
@@ -35,7 +35,7 @@
 - [Безпека / права / дистрибуція](docs/SECURITY_LEGAL.md).
 - [Технологічні рішення](docs/TECH_STACK_RESEARCH.md).
 
-## Запуск UI-прототипу на Windows
+## Запуск Windows alpha-прототипу
 
 Встановіть Rust stable (MSVC), а також Visual Studio Build Tools / Desktop development with C++.
 
@@ -44,13 +44,13 @@ cd apps/windows-media-player
 cargo run
 ```
 
-В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** EQ-візуалізація, плейлист і downloader ще демо. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
+В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** Є 31-смуговий DSP-процесор і керування басом/тембром/гучністю, сканування папок через кнопку Folder. Візуалізація та downloader поки демо. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
 
 ## Перший наступний крок
 
-Зробити **Phase 0 / технологічні spikes**, потім робочий vertical slice `Open MP3 → Decode → PCM → DSP bypass → WASAPI → Pause/Seek`. Не починати з downloader або складних скінів: це приховає проблеми аудіоядра.
+Підтвердити Windows-збірку й ручне прослуховування MP3/FLAC, перевірити плавні паузи, seek та еквалайзер. Далі рознести декодування й PCM-буфер окремо від audio callback і перенести коефіцієнти EQ на control thread.
 
 ## Статус перевірки
 
-UI + базовий код аудіовідтворення додано до GitHub; компіляція на Windows і реальний аудіовивід **ще не перевірені**. DSP/FFT, завантажувач та інсталятор **ще не реалізовані**.
+UI, аудіокерування, підпроцесний сканер і DSP додано у GitHub. **Windows-компіляція, звук і продуктивність ще не перевірені**. FFT, завантажувач та інсталятор **ще не реалізовані**. Повний технічний стан: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
 
