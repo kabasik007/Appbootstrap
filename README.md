@@ -1,5 +1,7 @@
 # Appbootstrap
 
+> **Branch note — Windows player**: This feature branch contains the **documentation-first Windows Rust music player project** under [apps/windows-media-player/](apps/windows-media-player/README.md), including its [engineering roadmap](apps/windows-media-player/ROADMAP.md). The default `main` branch remains the universal Appbootstrap template.
+
 **Universal, stack-agnostic application engineering bootstrap.** A practical collection of AI coding rules, project specifications, architecture guidance, quality gates, and a small generator. It is **not** a music player, a Rust starter, or a framework.
 
 > Українською: це універсальна основа для розробки стабільних і швидких застосунків разом з AI. Спочатку обираємо профіль і створюємо специфікацію, а вже потім пишемо код.
