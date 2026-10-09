@@ -1,6 +1,6 @@
 # Windows Media Player — проєкт (робоча назва: ZillaPlayer)
 
-> **Статус: Discovery / Roadmap.** Тут наразі є перевірена архітектурна пропозиція та план, **НЕ готовий або зібраний плеєр**. Назва продукту попередня.
+> **Статус: P0 / Native UI scaffold.** Є архітектурна пропозиція, roadmap і початковий інтерфейс на Rust + Slint (Player, Downloads, Tasks, Plans). **Аудіовідтворення і downloader ще не працюють, Windows-збірка не підтверджена.** Назва продукту попередня.
 
 Ця папка ізольована в гілці `apps/windows-media-player`. Гілка `main` залишається універсальним Appbootstrap. Ми свідомо **не** переносимо специфічні правила плеєра у головний шаблон.
 
@@ -35,11 +35,22 @@
 - [Безпека / права / дистрибуція](docs/SECURITY_LEGAL.md).
 - [Технологічні рішення](docs/TECH_STACK_RESEARCH.md).
 
+## Запуск UI-прототипу на Windows
+
+Встановіть Rust stable (MSVC), а також Visual Studio Build Tools / Desktop development with C++.
+
+```powershell
+cd apps/windows-media-player
+cargo run
+```
+
+Вікно поки демонструє дизайн і навігацію. Слайдери еквалайзера — UI-прототип, Play не відтворює музику, кнопка Analyze нічого не завантажує. Стан реалізації: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md).
+
 ## Перший наступний крок
 
 Зробити **Phase 0 / технологічні spikes**, потім робочий vertical slice `Open MP3 → Decode → PCM → DSP bypass → WASAPI → Pause/Seek`. Не починати з downloader або складних скінів: це приховає проблеми аудіоядра.
 
 ## Статус перевірки
 
-План створений у GitHub. Rust app, MSVC build, UI, аудіовивід, real-time latency, завантажувач та інсталятор **ще не реалізовані й не тестувалися**.
+План та UI-скелет є у GitHub. Компіляція на Windows **ще не перевірена**. Аудіовивід, real-time latency, завантажувач та інсталятор **ще не реалізовані й не тестувалися**.
 
