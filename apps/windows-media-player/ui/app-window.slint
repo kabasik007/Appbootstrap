@@ -68,6 +68,7 @@ export component AppWindow inherits Window {
     in-out property <float> volume-percent: 80;
     in-out property <string> elapsed-text: "00:00";
     in-out property <string> duration-text: "--:--";
+    in-out property <float> audio-level: 0;
     callback open-file;
     callback toggle-play;
     callback stop-playback;
@@ -232,14 +233,14 @@ export component AppWindow inherits Window {
                                         }
                                     }
                                     Rectangle {
-                                        height: 164px;
+                                        height: 188px;
                                         background: #0e203c;
                                         border-radius: 12px;
                                         VerticalLayout {
                                             padding: 14px;
                                             spacing: 10px;
                                             HorizontalLayout {
-                                                Text { text: "SPECTRUM  ·  ARTWORK PREVIEW (NOT LIVE YET)"; color: #d7ecff; font-size: 14px; }
+                                                Text { text: "SPECTRUM PREVIEW  ·  LIVE PCM PEAK BELOW"; color: #d7ecff; font-size: 14px; }
                                                 Rectangle { horizontal-stretch: 1; }
                                                 Text { text: "Bars  /  Glow  /  60 FPS target"; color: #55aaff; font-size: 12px; }
                                             }
@@ -252,6 +253,24 @@ export component AppWindow inherits Window {
                                                     background: bar > 70 ? #28d9ff : #356aff;
                                                     border-radius: 3px;
                                                 }
+                                            }
+                                            HorizontalLayout {
+                                                height: 16px;
+                                                spacing: 10px;
+                                                Text { text: "LIVE PEAK"; width: 82px; font-size: 12px; color: #5dcaff; }
+                                                Rectangle {
+                                                    height: 11px;
+                                                    horizontal-stretch: 1;
+                                                    background: #1e3656;
+                                                    border-radius: 5px;
+                                                    Rectangle {
+                                                        width: parent.width * root.audio-level / 100;
+                                                        height: parent.height;
+                                                        background: #27c8ff;
+                                                        border-radius: 5px;
+                                                    }
+                                                }
+                                                Text { text: "PCM"; width: 32px; color: #8dadcb; font-size: 11px; }
                                             }
                                         }
                                     }
