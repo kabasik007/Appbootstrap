@@ -38,7 +38,7 @@
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
 | ZP-101 | blocker | Open audio, Play/Pause/Stop, seek, master volume | implemented_unverified | Windows manual smoke + transport tests |
-| ZP-102 | blocker | Replace decoder-on-callback with background producer and bounded PCM ring | todo | Callback must avoid disk/decoder work; measure underruns |
+| ZP-102 | blocker | Replace decoder-on-callback with background producer and bounded PCM ring | implemented_unverified | Background Rodio decoder, bounded atomic PCM SPSC ring and nonblocking output source added. Generated WAV unit fixture + Windows cargo test, seek stress and underrun profiling required. |
 | ZP-103 | high | Coalesced transport commands and cancellation generations | todo | Stress with rapid seeks and track switching |
 | ZP-104 | high | Click-free pause, stop, seek and track switch with short audio fades | implemented_unverified | Listen and analyze waveforms for clicks |
 | ZP-105 | high | Detect and recover missing/changed WASAPI output devices | todo | USB/speaker device change tests |
