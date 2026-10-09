@@ -1,4 +1,6 @@
-# ZillaPlayer — architecture v0.1 (proposal)
+# ZillaPlayer — architecture v0.2 (implemented vs target)
+
+> **The flow diagram below describes the target architecture, not what the current alpha has already verified.** Current source: Slint UI → background control thread → Rodio Decoder/Source → EQ → CPAL/WASAPI. Folder scanning is a separate supervised child process with bounded JSONL IPC. Coefficients are now prepared on the control thread and published via revisioned atomics. The **PCM decode producer/ring and FFT analyzer are still pending**, as are Windows build and audio performance measurements. See [implementation status](IMPLEMENTATION_STATUS.md).
 
 ## Cross-cutting goals
 - Sound playback is a higher-priority workload than indexing, drawing or downloading.
@@ -6,7 +8,7 @@
 - UI, worker services and external downloader communicate via bounded messages and observable state.
 - User can disable downloader and visualizers: local playback still works.
 
-## Runtime diagram
+## Target runtime diagram (future work)
 
     Slint UI / input thread
            |  asynchronous commands / state snapshots
@@ -63,8 +65,8 @@ This is a **candidate** component decomposition. During P1, combine crates if co
 - `DownloadJob`: source URL, output format, destination, playlist selection, owner authorization acknowledgement, lifecycle.
 - `ExtensionManifest`: plugin ID, API version, type, permissions, execution isolation and publisher identity.
 
-## Concurrency / ownership
-- Audio callback exclusively consumes prebuffered blocks and owns its DSP state. No await, logging or DB calls there.
+## Concurrency / ownership (target contract, incomplete in alpha)
+- Target: output callback exclusively consumes prebuffered blocks and owns its DSP state, with no await/logging/DB calls. **Not yet met**: current Rodio source may decode during mixing; a bounded PCM producer/ring is next.
 - Decoder worker performs file I/O and decoding; seek cancels old generation and flushes staging buffers before activating new epoch.
 - Library scanner uses bounded queue / bulk transaction and must yield to playback.
 - Visualization worker reads its own bounded lossy ring; dropping frames is acceptable, dropping/late audio is not.
