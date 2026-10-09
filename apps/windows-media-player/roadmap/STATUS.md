@@ -13,7 +13,7 @@
 | P1 | Reliable local playback | in_progress | MP3/FLAC/WAV playback, 500 seek/pause/switch loops and unplug/replug recovery |
 | P2 | Advanced DSP / EQ | in_progress | Frequency response and signal tests, real hardware performance budget, no audible zipper/clicks |
 | P3 | Library & playlists | in_progress | 50k files, cancel/rescan, offline devices and persisted playlists tested |
-| P4 | Visualizers & themes | planned | FFT driven by real PCM, 30/60 fps caps and rendering measurements |
+| P4 | Visualizers & themes | in_progress | FFT driven by real PCM, 30/60 fps caps and rendering measurements |
 | P5 | Media downloader | planned | Authorized audio/video/playlist downloads, cancellation and error reporting verified |
 | P6 | Extension API | planned | Version mismatch/crashing plugin safely disabled without playback dropouts |
 | P7 | Release & distribution | planned | Signed installer/portable build and release smoke tests on supported Windows versions |
@@ -26,7 +26,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | todo | CI Windows cargo check/test/build + lockfile |
+| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | todo | Rodio 0.21 Decoder<BufReader<File>> type corrected against upstream API; need passing cargo check/test/release and committed Cargo.lock |
 | ZP-002 | high | Profile startup, memory, CPU and callback timing on Windows 10/11 | todo | Repeatable measurements on declared x64 hardware |
 | ZP-003 | high | Create module boundaries, P0 technical ADRs and roadmap source | implemented_unverified | Review and validate repo plan JSON + documentation |
 | ZP-004 | high | Check Slint, FFmpeg and yt-dlp distribution licenses | todo | Signed-off license matrix |
@@ -62,7 +62,7 @@
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
 | ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows |
-| ZP-302 | high | Persist folders and playlists in SQLite with migrations | todo | Restart and migration fixture tests |
+| ZP-302 | high | Persist folders and playlists in SQLite with migrations | in_progress | Interim versioned JSON session restore/save runs on a dedicated I/O thread with backup recovery; full SQLite library/migrations/folders still required and Windows tests pending |
 | ZP-303 | high | Virtualized searchable library, sorting and metadata tags | todo | Search under 100 ms on reference library |
 | ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | implemented_unverified | M3U/M3U8 UTF-8 import/export, relative paths and Unicode roundtrip tests added; still requires Windows UI/large playlist smoke |
 | ZP-305 | medium | Cover art thumbnail cache, library watch and duplicate detection | todo | Filesystem changes and memory ceiling |
@@ -73,7 +73,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | todo | FFT fed by actual playback samples |
+| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | in_progress | Actual PCM peak level telemetry and UI bar implemented with atomic sample snapshots; frequency-domain FFT worker and audio/display performance tests still pending |
 | ZP-402 | medium | Spectrum, oscilloscope, waveform, VU and peak-meter views | todo | Functional Slint visual modes |
 | ZP-403 | medium | Custom skins, resizable panels, DPI and compact Winamp-like mode | todo | 125/150/200% DPI and keyboard tests |
 | ZP-404 | medium | Throttle/freeze visualizer when minimized or battery-saving | todo | Idle CPU benchmark |
