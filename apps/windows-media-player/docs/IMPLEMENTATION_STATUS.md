@@ -1,49 +1,37 @@
-# ZillaPlayer — implementation status
+# ZillaPlayer implementation checkpoint — 10 October 2026
 
-## Phase
-**P1 / local playback alpha — code committed, Windows build pending verification.**
+**Code has been committed. A Windows build, audio playback and benchmarks have NOT been verified.**
 
-### Implemented in source
-- Native Rust + Slint UI with Player / Downloads / Tasks / Plans pages and a local file picker.
-- Background audio-control worker with bounded non-blocking UI status channel.
-- Local MP3, FLAC, WAV, OGG/M4A decoding supported through **Rodio 0.21.1 → Symphonia → CPAL/Windows WASAPI** (subject to build and file-format validation).
-- Play / Pause / Stop / Restart / percentage Seek / output volume.
-- Transport state, progress/volume clamping and time formatting regression tests.
-- Invalid replacement file retains playback of existing track.
-- CI configuration for Windows check / Rust tests / release build.
+## Added since the original UI prototype
 
-### Deliberately not implemented
-- A real equalizer, audio effects, ReplayGain, meters, live FFT and GPU spectrum.
-- Library indexing, queue/playlist playback, next/previous track and persistence.
-- yt-dlp/FFmpeg jobs, conversion, plugin loading, update system.
-- Working task-management data or roadmap syncing.
-- Windows EXE build confirmation, installer, benchmarks and release signing.
+- Folder scanner launched as a **separate child process** of the player (flag: --scan-worker). It does not initialize the GUI or audio. On Windows the scanner has below-normal process priority.
+- Scanner stdout is JSON Lines. A dedicated reader thread sends bounded chunks of 64 tracks into a bounded 64-event UI queue; generation checks cancel outdated scans.
+- The main thread stays responsive and only renders the first ten file names. In-memory playlist domain supports up to 50,000 paths and Next/Previous/Select.
+- A Rust audio control worker connects Rodio/CPAL playback and message-driven commands to Slint.
+- Pausing, switching tracks and seeking fade down then up with a 50–70 ms raised-cosine envelope. The sleeping/ramp code executes on the **control thread**, never directly in a Slint callback.
+- 31-band graphic EQ filter chain with ±12 dB, bass shelf, treble shelf, loudness switch, EQ bypass, preamp headroom and per-channel Biquad state. The compact UI exposes 15 of the 31 frequency bands.
+- Added targeted unit tests for playlist wraparound, scanner protocol, DSP finite output/coefficient validity and fade monotonicity.
 
-### Run the alpha locally on Windows
-Install Rust stable (MSVC toolchain) and Visual Studio Build Tools (Desktop development with C++).
+## Important limitations and technical debt
 
-```powershell
-git clone -b apps/windows-media-player https://github.com/kabasik007/Appbootstrap.git
-cd Appbootstrap/apps/windows-media-player
-cargo run
-```
+1. NO proof of successful Windows compilation or real MP3 playback: CI status and Windows host execution must be checked before calling this build ready.
+2. The existing Rodio decoder can still perform sample decoding during audio output callbacks. The audio **control** thread alone does not fully isolate decoder I/O. A pre-decoding producer thread and bounded PCM buffer are required next.
+3. EQ coefficients are recalculated only on control changes (at most once per 128 frames), but currently this calculation can execute in the mixing path. Before claiming hard real-time safety, move coefficient preparation to the control thread.
+4. The scanner keeps playback/UI separate, but the audio engine needs profiling under simultaneous scanning.
+5. In-memory list only. Saved playlists, folder history, SQLite index, album artwork, full 31-band editing panel and preset persistence are not finished.
+6. Loudness is an initial compensation contour, not yet calibrated or volume-dependent.
+7. Spectrum visualizer is currently **decorative**, not driven by live FFT. Downloader/Tasks/Plans are UI prototypes.
+8. Supported audio file formats must be tested on Windows with actual fixtures.
 
-Use **Open File** to select your MP3/FLAC/WAV. Controls will send real commands to the Rodio backend. Audio output is initialized off the UI thread. If no audio output exists, the status bar shows an error.
+## Local Windows verification
 
-```powershell
-cargo check
-cargo test
-cargo build --release
-```
+Requires Rust stable MSVC, Visual Studio 2022 Build Tools (C++ and Windows SDK). From apps/windows-media-player run:
 
-**Verification caveat:** Commands above have NOT been executed in this assistant environment because Rust and a Windows runner were not available locally. GitHub Actions is configured, but no passing run has been confirmed. The code is an alpha candidate, not a tested build.
+    cargo check
+    cargo test
+    cargo run
+    cargo build --release
 
-### Architecture note
-We use Rodio initially to get a working playback vertical slice. Before attaching real-time equalizer and FFT, profile and choose between Rodio's `Source` filters and custom Symphonia → bounded PCM ring → CPAL. Never perform filesystem/decoder initialization or FFT work inside the real-time callback. See docs/AUDIO_ENGINE.md.
+Manual checks: open MP3/FLAC/WAV, pause/resume/stop, repeated seeks and volume changes, EQ/bass/treble/loudness effect, scan nested directories, change folders mid-scan, next/previous playback, close while scanning, disabled audio device, and RAM/CPU sampling.
 
-### Next work
-1. Obtain a successful **Windows cargo check/test/build** and fix any Rust/Slint compilation problems.
-2. Capture an audio-smoke demonstration from a real Windows host (MP3 and FLAC).
-3. Add a playlist state engine, queue operations, and format metadata.
-4. Implement genuinely audible 10-band EQ as a separately tested DSP component (not just draggable UI sliders).
-5. Add FFT worker and visual frames only after audio latency is measured.
+**Next engineering gate:** obtain real compilation results, then separate decoder I/O from the audio callback via a bounded PCM ring buffer and move EQ coefficient generation out of the callback. Only then consider the audio engine production-grade.
