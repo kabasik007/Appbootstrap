@@ -5,6 +5,7 @@ use crate::{
     decode_worker,
     dsp::{EqControls, EqSource},
     pcm_ring::PcmRing,
+    visualizer::Spectrum,
     playback::{
         fade_weight, format_duration, media_title, normalise_volume, seek_position,
         PlaybackState, Transport,
@@ -40,20 +41,23 @@ pub enum Command {
 pub struct AudioController {
     pub commands: Sender<Command>,
     pub updates: Receiver<PlaybackState>,
+    pub spectrum: Arc<Spectrum>,
 }
 pub fn start_audio_worker() -> AudioController {
     let (commands, incoming) = mpsc::channel();
     let (updates, outgoing) = mpsc::sync_channel(16);
+    let spectrum = Spectrum::new();
+    let worker_spectrum = Arc::clone(&spectrum);
     thread::Builder::new()
         .name("zillaplayer-audio-control".into())
-        .spawn(move || worker_loop(incoming, outgoing))
+        .spawn(move || worker_loop(incoming, outgoing, worker_spectrum))
         .expect("failed to spawn audio control thread");
-    AudioController { commands, updates }
+    AudioController { commands, updates, spectrum }
 }
 
 /// The single owner of transport commands, Rodio sink and device stream.
 /// No sleep/file open/decoder init here can block the Slint event loop.
-fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
+fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>, spectrum: Arc<Spectrum>) {
     let mut output: Option<OutputStream> = None;
     let mut sink: Option<Sink> = None;
     let mut decoder: Option<Arc<PcmRing>> = None;
@@ -79,7 +83,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 send_snapshot(&events, &state);
                 match install_track(
                     &path, Duration::ZERO, false,
-                    &mut output, &mut sink, &mut decoder, state.volume, Arc::clone(&eq),
+                    &mut output, &mut sink, &mut decoder, state.volume, Arc::clone(&eq), Arc::clone(&spectrum),
                 ) {
                     Ok(duration) => {
                         file = Some(path.clone());
@@ -124,7 +128,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 } else if let Some(path) = file.as_ref() {
                     match install_track(
                         path, Duration::ZERO, false, &mut output, &mut sink,
-                        &mut decoder, state.volume, Arc::clone(&eq),
+                        &mut decoder, state.volume, Arc::clone(&eq), Arc::clone(&spectrum),
                     ) {
                         Ok(duration) => {
                             state.duration = duration;
@@ -167,7 +171,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                     // Failed seek keeps previous playback uninterrupted.
                     match install_track(
                         path, target, paused, &mut output, &mut sink,
-                        &mut decoder, state.volume, Arc::clone(&eq),
+                        &mut decoder, state.volume, Arc::clone(&eq), Arc::clone(&spectrum),
                     ) {
                         Ok(duration) => {
                             position_offset = target;
@@ -234,10 +238,11 @@ fn install_track(
     active_decoder: &mut Option<Arc<PcmRing>>,
     volume: f32,
     eq: Arc<EqControls>,
+    spectrum: Arc<Spectrum>,
 ) -> Result<Option<Duration>, String> {
     // Disk I/O and all decoder work take place on the decode worker.
     // This call only waits for metadata and a bounded initial prebuffer.
-    let prepared = decode_worker::prepare(path.clone(), offset)?;
+    let prepared = decode_worker::prepare(path.clone(), offset, spectrum)?;
     let duration = prepared.duration;
     if stream.is_none() {
         *stream = Some(OutputStreamBuilder::open_default_stream()
