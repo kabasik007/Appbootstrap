@@ -115,6 +115,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     ui.on_enable_eq(move |on| { let _ = cmd.send(Command::EnableEq(on)); });
 
     // UI only: consume ready messages without blocking. No scanning or decoding.
+    let scanner_shutdown = scanner.clone();
+    let command_shutdown = commands.clone();
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
@@ -159,7 +161,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
-    scanner_cancel_noop(); // keep teardown explicit; child IPC exits on broken pipe.
+    scanner_shutdown.cancel();
+    let _ = command_shutdown.send(Command::Shutdown);
     Ok(())
 }
 
@@ -167,4 +170,3 @@ fn refresh_list(queue: &Rc<RefCell<PlayQueue>>, rows: &Rc<VecModel<SharedString>
     let preview = queue.borrow().preview(10);
     rows.set_vec(preview.into_iter().map(SharedString::from).collect());
 }
-fn scanner_cancel_noop() {} // remove after adding explicit app shutdown owner
