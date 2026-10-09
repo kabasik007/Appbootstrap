@@ -8,7 +8,7 @@ Audio source wraps Rodio Decoder in the ZillaPlayer EqSource adapter. EQ uses 31
 
 ## Important hard real-time caveat
 
-The existing Rodio Source is still consumed on the audio mixing/output path. Decoding or I/O *might* happen during output callbacks: the control worker only isolates device setup and transport commands. Some EQ coefficient trig calculations also occur at parameter refresh. Do not claim this is completely non-blocking or hard RT safe.
+The existing Rodio Source is still consumed on the audio mixing/output path. Decoding or I/O *might* happen during output callbacks: the control worker only isolates device setup and transport commands. EQ parameter refresh now copies prepared atomic coefficients; trigonometric coefficient generation runs on the control thread. Do not claim this is completely non-blocking or hard RT safe.
 
 ## Target after Windows build is verified
 
@@ -23,7 +23,7 @@ The existing Rodio Source is still consumed on the audio mixing/output path. Dec
     prebuilt EQ coeff snapshots + gain envelope → output
                └→ loss-tolerant FFT analysis worker → throttled UI
 
-Moving parameter coefficient creation to control thread is required before declaring the EQ callback strictly real-time-safe. Test seek cancellation and stale data discard with generation counters. Measure underruns, latency, memory, CPU and concurrent folder scanning on a real Windows system.
+Filter coefficient creation has now been moved to the audio-control worker and shared through an atomic revisioned snapshot; the decoder still needs isolation before the callback can be considered real-time-safe. Test seek cancellation and stale data discard with generation counters. Measure underruns, latency, memory, CPU and concurrent folder scanning on a real Windows system.
 
 ## Tests needed before release
 
