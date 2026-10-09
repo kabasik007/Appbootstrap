@@ -1,7 +1,7 @@
 //! Folder scanning runs in a separate CHILD PROCESS, never on UI or audio threads.
 //! IPC is newline-delimited JSON with bounded batches and cancellation.
 use std::{fs, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf},
-          process::{Command, Stdio}, sync::{Arc, atomic::{AtomicU64, Ordering},
+          process::{Command, Stdio}, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU64, Ordering},
           mpsc::{sync_channel, Receiver, SyncSender, TrySendError}}, thread, time::Duration};
 
 #[cfg(windows)]
@@ -63,43 +63,78 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
     // Windows BELOW_NORMAL_PRIORITY_CLASS: scanner must not starve audio.
     #[cfg(windows)]
     command.creation_flags(0x0000_4000);
-    let mut child = match command.spawn() {
-        Ok(child) => child,
+    let child = match command.spawn() {
+        Ok(child) => Arc::new(Mutex::new(child)),
         Err(err) => {
             let _ = deliver(&sender, &generation, serial, ScanEvent::Error(serial, err.to_string()));
             return;
         }
     };
+
+    // Cancellation watchdog: stdin/pipe reads may block when a disk or
+    // network-mapped folder stops responding. The watchdog can terminate
+    // this process even while the reader waits for stdout.
+    let done = Arc::new(AtomicBool::new(false));
+    let watch_child = Arc::clone(&child);
+    let watch_generation = Arc::clone(&generation);
+    let watch_done = Arc::clone(&done);
+    let watchdog = thread::spawn(move || {
+        while !watch_done.load(Ordering::Acquire) {
+            if watch_generation.load(Ordering::Acquire) != serial {
+                if let Ok(mut process) = watch_child.lock() {
+                    let _ = process.kill();
+                }
+                break;
+            }
+            thread::sleep(Duration::from_millis(35));
+        }
+    });
+
+    let stdout = match child.lock() {
+        Ok(mut process) => process.stdout.take(),
+        Err(_) => None,
+    };
     let mut batch = Vec::with_capacity(BATCH);
     let mut count = 0_usize;
-    if let Some(stdout) = child.stdout.take() {
+    let mut aborted = false;
+    if let Some(stdout) = stdout {
         for line in BufReader::new(stdout).lines() {
-            if generation.load(Ordering::Acquire) != serial { break; }
-            let Ok(line) = line else { break };
+            if generation.load(Ordering::Acquire) != serial { aborted = true; break; }
+            let Ok(line) = line else { aborted = true; break; };
             if let Ok(Some(path)) = serde_json::from_str::<Option<String>>(&line) {
                 batch.push(PathBuf::from(path));
                 count += 1;
-                if batch.len() == BATCH {
-                    if !deliver(&sender, &generation, serial,
+                if batch.len() == BATCH &&
+                    !deliver(&sender, &generation, serial,
                         ScanEvent::Batch(serial, std::mem::take(&mut batch))) {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                        return;
-                    }
+                    aborted = true;
+                    break;
                 }
             }
         }
+    } else {
+        aborted = true;
     }
-    if generation.load(Ordering::Acquire) != serial {
-        let _ = child.kill();
-        let _ = child.wait();
+    if generation.load(Ordering::Acquire) != serial { aborted = true; }
+    if aborted {
+        if let Ok(mut process) = child.lock() {
+            let _ = process.kill();
+        }
+    }
+    let exit = child.lock().ok().and_then(|mut p| p.wait().ok());
+    done.store(true, Ordering::Release);
+    let _ = watchdog.join();
+
+    if generation.load(Ordering::Acquire) != serial { return; }
+    if aborted {
+        let _ = deliver(&sender, &generation, serial,
+            ScanEvent::Error(serial, "Folder scan canceled or interrupted".into()));
         return;
     }
-    let exit = child.wait();
     if !batch.is_empty() &&
         !deliver(&sender, &generation, serial, ScanEvent::Batch(serial, batch)) { return; }
     match exit {
-        Ok(status) if status.success() => {
+        Some(status) if status.success() => {
             let _ = deliver(&sender, &generation, serial, ScanEvent::Done(serial, count));
         }
         result => {
