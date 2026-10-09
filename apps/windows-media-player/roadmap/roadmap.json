@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "Child-process cancellation and 31-band DSP atomics reworked; M3U/M3U8 import/export added. All Windows builds and audio benchmarks remain unverified.",
+  "status_note": "2026-10-10: P1 PCM buffering code implemented with decode worker, cancellation on stop/seek, 2s bounded ring, generated WAV fixture and starvation metrics; Rust/Windows compilation and audible behavior not yet verified.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -66,8 +66,8 @@
           "id": "ZP-102",
           "title": "Replace decoder-on-callback with background producer and bounded PCM ring",
           "priority": "blocker",
-          "status": "todo",
-          "verification": "Callback must avoid disk/decoder work; measure underruns"
+          "status": "implemented_unverified",
+          "verification": "Background Rodio decoder, bounded atomic PCM SPSC ring and nonblocking output source added. Generated WAV unit fixture + Windows cargo test, seek stress and underrun profiling required."
         },
         {
           "id": "ZP-103",
