@@ -65,3 +65,19 @@ Start with [AGENTS.md](AGENTS.md). Supporting adapters for GitHub Copilot, Claud
 ## License
 
 No license has been selected for this repository yet. The owner should choose one before inviting unrestricted third-party reuse.
+
+## Android-native runnable starter (android branch)
+
+The `android/` directory contains a standalone Kotlin / Jetpack Compose multi-module
+sample with CI, signed-release workflow, immutable UDF state and unit tests.
+Read [Android quick start](android/README.md) and
+[Android architecture](android/docs/ARCHITECTURE.md).
+
+Generate a new **standalone Android project** with:
+
+```bash
+python3 scripts/new_android_project.py --name "My Player" --package com.example.player --output ../my-player
+```
+
+This is intentionally separate from the stack-agnostic `scripts/new_project.py` generator.
+`main` remains the generic template; work on the Android implementation stays in `android`.
