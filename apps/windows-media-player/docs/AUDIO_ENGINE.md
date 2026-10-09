@@ -46,7 +46,7 @@ EQ coefficients are prepared on the control thread, then published as an atomic 
 ## Limits / technical debt
 
 - Correctness of Windows compilation, Rodio/Slint API integration, audio sound quality and underrun budgets is **not yet confirmed**.
-- Current transport command channel is unbounded. Rapid repeated seeking can enqueue too many decoder restarts; coalescing/cancellation remains P1 work.
+- Adjacent rapid seek commands are now coalesced in the control worker while preserving FIFO Stop/EQ commands. The transport channel remains unbounded and wider command coalescing/generation cancellation still needs stress tests (ZP-103).
 - Every seek opens a fresh file decoder; seek startup is not zero-cost.
 - Output latency/starvation silence can affect observed playback clock timing. Instrument decoded vs emitted frames in a future iteration.
 - Variable sample-rate/channel-layout tracks are not modeled across stream spans; test and handle transitions.
