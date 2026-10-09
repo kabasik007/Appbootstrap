@@ -27,6 +27,7 @@
 - Volume, fade and seek input validation.
 - Session Unicode restore, corrupted-primary backup recovery, invalid selection, PCM peak range and decoded-sample level tests.
 - Windows Actions configuration includes `cargo check`, `cargo test`, release build and scanner-subprocess smoke.
+- `tools/verify-windows.ps1` now runs check/test/release locally, checks EXE existence and reports the Cargo.lock state. Script execution is not yet confirmed.
 
 ## Not yet shipped
 
@@ -38,7 +39,7 @@
 
 ## Current engineering gate
 
-1. Get a **successful Windows Cargo check/test/release build**, record exact logs and commit `Cargo.lock`.
+1. Run `pwsh -File tools/verify-windows.ps1` with Rust stable MSVC/VS Build Tools on Windows, record real check/test/release output and commit `Cargo.lock` after successful resolution.
 2. Test WAV/FLAC/MP3 on a Windows audio device including pause, seek and switching.
 3. Measure PCM underruns, CPU/RAM and device handling. Resolve any decoder or UI build/runtime errors.
 4. Expand partial adjacent-seek coalescing into fully cancellable transport generations; implement the SQLite index and FFT worker after Windows playback verification.
