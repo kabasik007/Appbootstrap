@@ -312,6 +312,26 @@ mod tests {
         controls.set_enabled(false);
         for _ in 0..1000 { assert!(eq.process(0.).is_finite()); }
     }
+    #[test]
+    fn revisioned_coefficients_survive_concurrent_control_updates() {
+        let controls = EqControls::new();
+        let mut processor = EqProcessor::new(48_000, 2, Arc::clone(&controls));
+        let writer = std::thread::spawn(move || {
+            for step in 0..400 {
+                controls.set_band(16, (step % 25) as f32 - 12.);
+                controls.set_bass((step % 15) as f32 - 7.);
+                controls.set_enabled(step % 10 != 0);
+            }
+        });
+        for index in 0..50_000 {
+            let input = (index as f32 * 0.03).sin() * 0.25;
+            let sample = processor.process(input);
+            assert!(sample.is_finite());
+            assert!(sample.abs() <= 1.);
+        }
+        writer.join().unwrap();
+    }
+
     #[test] fn coefficients_are_finite() {
         for rate in [8_000.,44_100.,96_000.] {
             for f in BAND_HZ {
