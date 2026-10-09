@@ -85,7 +85,7 @@ pub fn worker_entry(folder: &Path) -> std::io::Result<()> {
             if kind.is_dir() && depth < 64 {
                 stack.push((path, depth + 1));
             } else if kind.is_file() && is_audio(&path) {
-                writeln!(out, "{}", serde_json::to_string(&Some(path.to_string_lossy().to_string()))?)?;
+                writeln!(out, "{}", serde_json::to_string(&Some(path.to_string_lossy().to_string())).map_err(std::io::Error::other)?)?;
                 count += 1;
                 if count % BATCH == 0 { out.flush()?; }
             }
