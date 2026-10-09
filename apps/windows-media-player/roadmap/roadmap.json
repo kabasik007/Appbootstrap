@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: P1 PCM buffering code implemented with decode worker, cancellation on stop/seek, 2s bounded ring, generated WAV fixture and starvation metrics; Rust/Windows compilation and audible behavior not yet verified.",
+  "status_note": "2026-10-10: Added Rust session-v1.json persistence with backup and background I/O, live PCM peak meter (not FFT), and fixed Rodio Decoder<BufReader<File>> typing. All new source remains unverified by a Windows build.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -23,7 +23,7 @@
           "title": "Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock",
           "priority": "blocker",
           "status": "todo",
-          "verification": "CI Windows cargo check/test/build + lockfile"
+          "verification": "Rodio 0.21 Decoder<BufReader<File>> type corrected against upstream API; need passing cargo check/test/release and committed Cargo.lock"
         },
         {
           "id": "ZP-002",
@@ -154,8 +154,8 @@
           "id": "ZP-302",
           "title": "Persist folders and playlists in SQLite with migrations",
           "priority": "high",
-          "status": "todo",
-          "verification": "Restart and migration fixture tests"
+          "status": "in_progress",
+          "verification": "Interim versioned JSON session restore/save runs on a dedicated I/O thread with backup recovery; full SQLite library/migrations/folders still required and Windows tests pending"
         },
         {
           "id": "ZP-303",
@@ -183,7 +183,7 @@
     {
       "id": "P4",
       "name": "Visualizers & themes",
-      "status": "planned",
+      "status": "in_progress",
       "goal": "Accurate responsive effects that never stall audio",
       "gate": "FFT driven by real PCM, 30/60 fps caps and rendering measurements",
       "tasks": [
@@ -191,8 +191,8 @@
           "id": "ZP-401",
           "title": "Nonblocking PCM telemetry tap and FFT analysis worker",
           "priority": "high",
-          "status": "todo",
-          "verification": "FFT fed by actual playback samples"
+          "status": "in_progress",
+          "verification": "Actual PCM peak level telemetry and UI bar implemented with atomic sample snapshots; frequency-domain FFT worker and audio/display performance tests still pending"
         },
         {
           "id": "ZP-402",
