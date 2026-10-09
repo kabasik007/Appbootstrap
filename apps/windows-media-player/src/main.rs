@@ -178,7 +178,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
-    scanner_shutdown.cancel();
+    scanner_shutdown.shutdown();
     let _ = command_shutdown.send(Command::Shutdown);
     Ok(())
 }
