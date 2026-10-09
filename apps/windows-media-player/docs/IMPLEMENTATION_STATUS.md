@@ -16,8 +16,8 @@
 
 1. NO proof of successful Windows compilation or real MP3 playback: CI status and Windows host execution must be checked before calling this build ready.
 2. The existing Rodio decoder can still perform sample decoding during audio output callbacks. The audio **control** thread alone does not fully isolate decoder I/O. A pre-decoding producer thread and bounded PCM buffer are required next.
-3. EQ coefficients are recalculated only on control changes (at most once per 128 frames), but currently this calculation can execute in the mixing path. Before claiming hard real-time safety, move coefficient preparation to the control thread.
-4. The scanner keeps playback/UI separate, but the audio engine needs profiling under simultaneous scanning.
+3. EQ filter coefficients are now prepared by the audio CONTROL thread and published through an atomic revisioned snapshot. The audio path copies only stable coefficients at most once per 128 frames. The callback still may decode through Rodio and requires profiling; this is **not** proof of full real-time safety.
+4. The scanner runs in its own process under a supervisor using nonblocking `try_wait()` and an independent stdout reader. Cancellation kills and reaps the process; shutdown joins supervisors. Windows stress tests and profiling remain pending.
 5. In-memory list only. Saved playlists, folder history, SQLite index, album artwork, full 31-band editing panel and preset persistence are not finished.
 6. Loudness is an initial compensation contour, not yet calibrated or volume-dependent.
 7. Spectrum visualizer is currently **decorative**, not driven by live FFT. Downloader/Tasks/Plans are UI prototypes.
