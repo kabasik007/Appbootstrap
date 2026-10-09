@@ -74,6 +74,8 @@ export component AppWindow inherits Window {
     callback seek-to(float);
     callback set-volume(float);
     callback open-folder;
+    callback import-playlist;
+    callback export-playlist;
     callback play-library-track(int);
     callback previous-track;
     callback next-track;
@@ -445,7 +447,13 @@ export component AppWindow inherits Window {
                                     spacing: 15px;
                                     Text { text: "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
                                     Text { text: "Folder scan in a separate child process; playback stays responsive"; color: #91b1d5; font-size: 17px; }
-                                    Button { text: "Scan Music Folder"; clicked => { root.open-folder(); } }
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        Button { text: "Scan Folder"; clicked => { root.open-folder(); } }
+                                        Button { text: "Import M3U / M3U8"; clicked => { root.import-playlist(); } }
+                                        Button { text: "Save M3U8"; clicked => { root.export-playlist(); } }
+                                        Rectangle { horizontal-stretch: 1; background: #080f1c; }
+                                    }
                                     Text { text: root.library-count + " indexed (first 10 shown)"; color: #4dc1ff; font-size: 15px; }
                                     Rectangle {
                                         vertical-stretch: 1; background: #102039; border-radius: 12px;
