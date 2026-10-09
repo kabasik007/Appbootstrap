@@ -28,6 +28,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/windows-media-player
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check roadmap schema and generated plan
+        run: python tools/roadmap_sync.py --check
       - name: Check project
         run: cargo check
       - name: Run Rust tests
