@@ -73,8 +73,8 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | in_progress | Actual PCM peak level telemetry and UI bar implemented with atomic sample snapshots; frequency-domain FFT worker and audio/display performance tests still pending |
-| ZP-402 | medium | Spectrum, oscilloscope, waveform, VU and peak-meter views | todo | Functional Slint visual modes |
+| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | implemented_unverified | Bounded PCM tap, separate RustFFT worker, Hann-2048 FFT, log 32-band atomics and 20 FPS Slint model committed; generated sine tests and Windows builds/perf/listening pending |
+| ZP-402 | medium | Spectrum, oscilloscope, waveform, VU and peak-meter views | in_progress | Dynamic real spectrum bars and PCM peak meter implemented in source; oscilloscope, waveform, multichannel VU and hardware validation still pending |
 | ZP-403 | medium | Custom skins, resizable panels, DPI and compact Winamp-like mode | todo | 125/150/200% DPI and keyboard tests |
 | ZP-404 | medium | Throttle/freeze visualizer when minimized or battery-saving | todo | Idle CPU benchmark |
 
