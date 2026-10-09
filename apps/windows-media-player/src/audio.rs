@@ -204,6 +204,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
                 }
             }
         }
+        state.buffer_starvations = decoder.as_ref().map_or(0, |buffer| buffer.underruns());
         send_snapshot(&events, &state);
     }
 
@@ -266,7 +267,14 @@ fn send_snapshot(sender: &SyncSender<PlaybackState>, state: &PlaybackState) {
 pub fn status_text(state: &PlaybackState) -> String {
     let position = format_duration(state.position);
     let duration = state.duration.map(format_duration).unwrap_or_else(|| "--:--".into());
-    format!("{} | {position}/{duration} | {}", state.label(), state.detail)
+    if state.buffer_starvations == 0 {
+        format!("{} | {position}/{duration} | {}", state.label(), state.detail)
+    } else {
+        format!(
+            "{} | {position}/{duration} | {} | PCM starvation blocks: {}",
+            state.label(), state.detail, state.buffer_starvations
+        )
+    }
 }
 
 /// Raised-cosine fades run only on the transport control worker.
