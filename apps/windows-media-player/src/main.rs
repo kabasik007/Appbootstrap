@@ -87,7 +87,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let visual_window = ui.as_weak();
     let visual_timer = slint::Timer::default();
     visual_timer.start(slint::TimerMode::Repeated, Duration::from_millis(50), move || {
-        if visual_window.upgrade().is_none() { return; }
+        let Some(window) = visual_window.upgrade() else { return; };
+        // No pointless render-model work while the Library/Downloader is open.
+        if window.get_active_page().as_str() != "Player" { return; }
         for (index, level) in spectrum_for_ui.read().iter().enumerate() {
             // Skip identical values to avoid needless layout/render invalidation.
             if spectrum_model.row_data(index).is_none_or(|old| (old - level).abs() > 0.75) {
