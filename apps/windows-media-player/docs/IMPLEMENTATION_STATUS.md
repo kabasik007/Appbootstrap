@@ -14,6 +14,7 @@
 - Up to 50k paths held in an in-memory queue, M3U/M3U8 import/export on background workers and first-ten preview.
 - Versioned P0–P7 roadmap (34 tasks) shown in Plans and Tasks from one JSON file; source-only code never appears as verified.
 - Session persistence: `src/session.rs` now asynchronously writes/restores `session-v1.json` under Windows AppData, with temp/backup recovery, a 50k-track bound, and selected queue index; it never automatically starts playback.
+- Live FFT visualizer: dedicated RustFFT worker, bounded nonblocking PCM tap, Hann 2048/window, 32 logarithmic bands and atomic snapshots; Slint receives at most 20 FPS via its independent visual timer. Analyzer drop/cancel and frequency tests added. **Unverified build.**
 - Player visualizer area has a **real PCM peak bar** driven by a lossy atomic sample snapshot from the buffered output source. The large spectrum graphic remains a static mockup; FFT is not implemented.
 - Corrected Rodio 0.21 file decoding type to `Decoder<BufReader<File>>` according to the upstream API.
 
@@ -33,7 +34,7 @@
 
 - Verified Windows EXE / actual audible playback / installation or startup timings.
 - Coalesced rapid seeks and a generation-based transport state machine.
-- Device recovery, robust gapless playback, **real FFT** (only PCM peak metering exists), complete SQLite library/indexing, all 31 EQ sliders / EQ preset storage.
+- Device recovery, robust gapless playback, complete SQLite library/indexing, all 31 EQ sliders / EQ preset storage. **FFT spectrum now exists as code**, but Windows rendering, accuracy, DSP interaction and 20 FPS performance are not verified.
 - yt-dlp/FFmpeg download manager and external plugin loader.
 - Stable performance limits, 8h soak test, signing and packaging.
 
