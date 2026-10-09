@@ -2,7 +2,7 @@
 //! IPC is newline-delimited JSON with bounded batches and cancellation.
 use std::{fs, io::{BufRead, BufReader, BufWriter, Write}, path::{Path, PathBuf},
           process::{Command, Stdio}, sync::{Arc, atomic::{AtomicU64, Ordering},
-          mpsc::{sync_channel, Receiver, SyncSender}}, thread};
+          mpsc::{sync_channel, Receiver, SyncSender, TrySendError}}, thread, time::Duration};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -21,6 +21,23 @@ pub struct LibraryScanner {
     sender: SyncSender<ScanEvent>,
     pub updates: Receiver<ScanEvent>,
 }
+// Do not get permanently stuck sending into a full UI event queue.
+// On cancellation, return so the supervisor can kill/wait for its child.
+fn deliver(sender: &SyncSender<ScanEvent>, generation: &AtomicU64, serial: u64,
+           mut event: ScanEvent) -> bool {
+    loop {
+        if generation.load(Ordering::Acquire) != serial { return false; }
+        match sender.try_send(event) {
+            Ok(()) => return true,
+            Err(TrySendError::Disconnected(_)) => return false,
+            Err(TrySendError::Full(returned)) => {
+                event = returned;
+                thread::sleep(Duration::from_millis(15));
+            }
+        }
+    }
+}
+
 impl LibraryScanner {
     pub fn new() -> Self {
         let (sender, updates) = sync_channel(64);
@@ -37,7 +54,8 @@ impl LibraryScanner {
 }
 fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: SyncSender<ScanEvent>) {
     let Ok(exe) = std::env::current_exe() else {
-        let _ = sender.send(ScanEvent::Error(serial, "Cannot locate scanner executable".into())); return;
+        let _ = deliver(&sender, &generation, serial,
+            ScanEvent::Error(serial, "Cannot locate scanner executable".into())); return;
     };
     let mut command = Command::new(exe);
     command.arg("--scan-worker").arg(folder)
@@ -47,7 +65,10 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
     command.creation_flags(0x0000_4000);
     let mut child = match command.spawn() {
         Ok(child) => child,
-        Err(err) => { let _ = sender.send(ScanEvent::Error(serial, err.to_string())); return; }
+        Err(err) => {
+            let _ = deliver(&sender, &generation, serial, ScanEvent::Error(serial, err.to_string()));
+            return;
+        }
     };
     let mut batch = Vec::with_capacity(BATCH);
     let mut count = 0_usize;
@@ -59,8 +80,11 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
                 batch.push(PathBuf::from(path));
                 count += 1;
                 if batch.len() == BATCH {
-                    if sender.send(ScanEvent::Batch(serial, std::mem::take(&mut batch))).is_err() {
-                        break;
+                    if !deliver(&sender, &generation, serial,
+                        ScanEvent::Batch(serial, std::mem::take(&mut batch))) {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return;
                     }
                 }
             }
@@ -72,10 +96,16 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
         return;
     }
     let exit = child.wait();
-    if !batch.is_empty() { let _ = sender.send(ScanEvent::Batch(serial, batch)); }
+    if !batch.is_empty() &&
+        !deliver(&sender, &generation, serial, ScanEvent::Batch(serial, batch)) { return; }
     match exit {
-        Ok(status) if status.success() => { let _ = sender.send(ScanEvent::Done(serial, count)); }
-        result => { let _ = sender.send(ScanEvent::Error(serial, format!("Scanner failed: {result:?}"))); }
+        Ok(status) if status.success() => {
+            let _ = deliver(&sender, &generation, serial, ScanEvent::Done(serial, count));
+        }
+        result => {
+            let _ = deliver(&sender, &generation, serial,
+                ScanEvent::Error(serial, format!("Scanner failed: {result:?}")));
+        }
     }
 }
 pub fn worker_entry(folder: &Path) -> std::io::Result<()> {
