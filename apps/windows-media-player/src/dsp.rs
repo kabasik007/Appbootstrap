@@ -1,9 +1,9 @@
 //! 31-band graphic EQ + bass / treble / loudness with per-channel biquad state.
 //! Audio samples are processed with no allocations, mutexes, logging or disk access.
-//! Coefficient updates are throttled (at most once per 128 frames on parameter change).
-//! P2 improvement: calculate new coefficients on the control worker for hard-RT use.
+//! Filter coefficients and gain are calculated on the CONTROL worker and published
+//! through an atomic revisioned snapshot. The audio path only reads atomics.
 use rodio::{ChannelCount, SampleRate, Source};
-use std::{f32::consts::PI, sync::{Arc, atomic::{AtomicBool, AtomicU32, Ordering}}, time::Duration};
+use std::{f32::consts::PI, sync::{Arc, atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering}}, time::Duration};
 
 pub const BAND_HZ: [f32; 31] = [
     20., 25., 31.5, 40., 50., 63., 80., 100., 125., 160.,
@@ -14,40 +14,117 @@ pub const BAND_HZ: [f32; 31] = [
 const FILTER_COUNT: usize = 35; // 31 graphic + bass + treble + loudness low/high
 
 fn atomic_float(value: f32) -> AtomicU32 { AtomicU32::new(value.to_bits()) }
-fn read_float(value: &AtomicU32) -> f32 { f32::from_bits(value.load(Ordering::Relaxed)) }
 
+/// Control worker is the sole writer; audio callback is the reader.
 pub struct EqControls {
-    pub bands: [AtomicU32; 31],
-    pub preamp_db: AtomicU32,
-    pub bass_db: AtomicU32,
-    pub treble_db: AtomicU32,
-    pub loudness: AtomicBool,
-    pub enabled: AtomicBool,
+    bands: [AtomicU32; 31],
+    preamp_db: AtomicU32,
+    bass_db: AtomicU32,
+    treble_db: AtomicU32,
+    loudness: AtomicBool,
+    enabled: AtomicBool,
+    sample_rate: AtomicU32,
+    revision: AtomicU64,
+    // One frame contains five floating point coefficients per filter.
+    prepared: [AtomicU32; FILTER_COUNT * 5],
+    prepared_gain: AtomicU32,
 }
 impl EqControls {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
+        let controls = Arc::new(Self {
             bands: std::array::from_fn(|_| atomic_float(0.)),
             preamp_db: atomic_float(-6.),
             bass_db: atomic_float(0.),
             treble_db: atomic_float(0.),
             loudness: AtomicBool::new(false),
             enabled: AtomicBool::new(true),
-        })
+            sample_rate: AtomicU32::new(44_100),
+            revision: AtomicU64::new(0),
+            prepared: std::array::from_fn(|i| atomic_float(if i % 5 == 0 { 1. } else { 0. })),
+            prepared_gain: atomic_float(1.),
+        });
+        controls.prepare();
+        controls
+    }
+    pub fn set_sample_rate(&self, rate: u32) {
+        self.sample_rate.store(rate.max(8_000), Ordering::SeqCst);
+        self.prepare();
     }
     pub fn set_band(&self, band: usize, db: f32) {
         if band < 31 && db.is_finite() {
-            self.bands[band].store(db.clamp(-12.,12.).to_bits(), Ordering::Relaxed);
+            self.bands[band].store(db.clamp(-12., 12.).to_bits(), Ordering::SeqCst);
+            self.prepare();
         }
     }
     pub fn set_preamp(&self, db: f32) {
-        if db.is_finite() { self.preamp_db.store(db.clamp(-18.,6.).to_bits(), Ordering::Relaxed); }
+        if db.is_finite() {
+            self.preamp_db.store(db.clamp(-18., 6.).to_bits(), Ordering::SeqCst);
+            self.prepare();
+        }
     }
     pub fn set_bass(&self, db: f32) {
-        if db.is_finite() { self.bass_db.store(db.clamp(-12.,12.).to_bits(), Ordering::Relaxed); }
+        if db.is_finite() {
+            self.bass_db.store(db.clamp(-12., 12.).to_bits(), Ordering::SeqCst);
+            self.prepare();
+        }
     }
     pub fn set_treble(&self, db: f32) {
-        if db.is_finite() { self.treble_db.store(db.clamp(-12.,12.).to_bits(), Ordering::Relaxed); }
+        if db.is_finite() {
+            self.treble_db.store(db.clamp(-12., 12.).to_bits(), Ordering::SeqCst);
+            self.prepare();
+        }
+    }
+    pub fn set_loudness(&self, enabled: bool) {
+        self.loudness.store(enabled, Ordering::SeqCst);
+        self.prepare();
+    }
+    pub fn set_enabled(&self, enabled: bool) {
+        self.enabled.store(enabled, Ordering::SeqCst);
+        self.prepare();
+    }
+    fn prepare(&self) {
+        // Never called by EqProcessor::process(). Only call on the command
+        // thread or once during source construction.
+        let rate = self.sample_rate.load(Ordering::SeqCst) as f32;
+        let on = self.enabled.load(Ordering::SeqCst);
+        let mut settings = [0_f32; FILTER_COUNT];
+        if on {
+            for (i, band) in self.bands.iter().enumerate() {
+                settings[i] = f32::from_bits(band.load(Ordering::SeqCst));
+            }
+            settings[31] = f32::from_bits(self.bass_db.load(Ordering::SeqCst));
+            settings[32] = f32::from_bits(self.treble_db.load(Ordering::SeqCst));
+            if self.loudness.load(Ordering::SeqCst) {
+                settings[33] = 3.;
+                settings[34] = 1.5;
+            }
+        }
+        let gain = if on {
+            10_f32.powf(f32::from_bits(self.preamp_db.load(Ordering::SeqCst)) / 20.)
+        } else { 1. };
+        let coeffs: [Coeff; FILTER_COUNT] = std::array::from_fn(|idx| {
+            let (hz, q, mode) = if idx < 31 {
+                (BAND_HZ[idx], 4.3, Mode::Peak)
+            } else if idx == 31 || idx == 33 {
+                (95., 0.707, Mode::LowShelf)
+            } else {
+                (7200., 0.707, Mode::HighShelf)
+            };
+            coefficients(rate, hz, settings[idx], q, mode)
+        });
+        // A single writer publishes an odd revision while updating. Readers
+        // skip the update if either revision changes or is odd. SeqCst avoids
+        // using an incoherent mix of old/new coefficient fields.
+        self.revision.fetch_add(1, Ordering::SeqCst);
+        for (index, coeff) in coeffs.iter().enumerate() {
+            let base = 5 * index;
+            for (offset, field) in [coeff.b0,coeff.b1,coeff.b2,coeff.a1,coeff.a2]
+                .into_iter().enumerate() {
+                self.prepared[base + offset].store(field.to_bits(), Ordering::SeqCst);
+            }
+        }
+        self.prepared_gain.store(gain.to_bits(), Ordering::SeqCst);
+        self.revision.fetch_add(1, Ordering::SeqCst);
     }
 }
 #[derive(Clone, Copy)]
@@ -118,51 +195,48 @@ fn coefficients(rate: f32, center: f32, gain_db: f32, q: f32, mode: Mode) -> Coe
 pub struct EqProcessor {
     controls: Arc<EqControls>,
     filters: Vec<[Biquad; FILTER_COUNT]>,
-    targets: [f32; FILTER_COUNT],
-    sample_rate: f32,
     channel: usize,
     frames_to_refresh: usize,
+    applied_revision: u64,
     amp: f32,
     target_amp: f32,
 }
 impl EqProcessor {
     pub fn new(rate: u32, channels: usize, controls: Arc<EqControls>) -> Self {
-        let channels = channels.clamp(1,16);
+        // This constructor is called on the AUDIO CONTROL thread.
+        controls.set_sample_rate(rate);
+        let channels = channels.clamp(1, 16);
         Self {
-            controls, filters: vec![[Biquad::default(); FILTER_COUNT];channels],
-            targets: [f32::NAN; FILTER_COUNT],
-            sample_rate: rate.max(8_000) as f32,
-            channel:0, frames_to_refresh:0, amp:1.,target_amp:1.,
+            controls, filters: vec![[Biquad::default(); FILTER_COUNT]; channels],
+            channel: 0, frames_to_refresh: 0, applied_revision: u64::MAX,
+            amp: 1., target_amp: 1.,
         }
     }
     fn refresh(&mut self) {
-        let on = self.controls.enabled.load(Ordering::Relaxed);
-        let mut settings = [0_f32; FILTER_COUNT];
-        if on {
-            for (i, band) in self.controls.bands.iter().enumerate() {
-                settings[i] = read_float(band);
-            }
-            settings[31] = read_float(&self.controls.bass_db);
-            settings[32] = read_float(&self.controls.treble_db);
-            if self.controls.loudness.load(Ordering::Relaxed) {
-                settings[33] = 3.;
-                settings[34] = 1.5;
-            }
-        }
-        self.target_amp = if on { 10_f32.powf(read_float(&self.controls.preamp_db)/20.) } else { 1. };
-        for (idx, db) in settings.into_iter().enumerate() {
-            if db == self.targets[idx] { continue; }
-            self.targets[idx] = db;
-            let (hz,q,mode) = if idx < 31 {
-                (BAND_HZ[idx], 4.3, Mode::Peak)
-            } else if idx == 31 || idx == 33 {
-                (95., 0.707, Mode::LowShelf)
-            } else {
-                (7200., 0.707, Mode::HighShelf)
+        let before = self.controls.revision.load(Ordering::SeqCst);
+        if before == self.applied_revision || before & 1 != 0 { return; }
+        let mut copy = [Coeff::default(); FILTER_COUNT];
+        for (index, coeff) in copy.iter_mut().enumerate() {
+            let b = index * 5;
+            let read = |offset: usize| f32::from_bits(
+                self.controls.prepared[b + offset].load(Ordering::SeqCst)
+            );
+            *coeff = Coeff {
+                b0: read(0), b1: read(1), b2: read(2),
+                a1: read(3), a2: read(4),
             };
-            let coeff = coefficients(self.sample_rate,hz,db,q,mode);
-            for filters in &mut self.filters { filters[idx].target = coeff; }
         }
+        let gain = f32::from_bits(self.controls.prepared_gain.load(Ordering::SeqCst));
+        let after = self.controls.revision.load(Ordering::SeqCst);
+        if before != after || after & 1 != 0 { return; }
+        // Only stable, complete coefficient snapshots reach the filters.
+        for filters in &mut self.filters {
+            for (filter, coeff) in filters.iter_mut().zip(copy.iter()) {
+                filter.target = *coeff;
+            }
+        }
+        self.target_amp = gain;
+        self.applied_revision = after;
     }
     pub fn process(&mut self, sample: f32) -> f32 {
         if self.channel == 0 {
@@ -171,7 +245,7 @@ impl EqProcessor {
                 self.frames_to_refresh = 128;
             }
             self.frames_to_refresh -= 1;
-            self.amp += 0.0009*(self.target_amp-self.amp);
+            self.amp += 0.0009 * (self.target_amp - self.amp);
         }
         let chan = self.channel;
         self.channel = (self.channel + 1) % self.filters.len();
@@ -179,7 +253,7 @@ impl EqProcessor {
         for filter in &mut self.filters[chan] {
             if !filter.idle() { value = filter.process(value); }
         }
-        (value*self.amp).clamp(-1.,1.)
+        (value * self.amp).clamp(-1., 1.)
     }
     pub fn reset(&mut self) {
         for filters in &mut self.filters {
@@ -187,7 +261,7 @@ impl EqProcessor {
                 filter.z1 = 0.; filter.z2 = 0.;
             }
         }
-        self.channel=0;
+        self.channel = 0;
     }
 }
 pub struct EqSource<S:Source<Item=f32>> { source:S, processor:EqProcessor }
@@ -235,7 +309,7 @@ mod tests {
             sum+=(output-sample).abs();
         }
         assert!(sum>5.);
-        controls.enabled.store(false,Ordering::Relaxed);
+        controls.set_enabled(false);
         for _ in 0..1000 { assert!(eq.process(0.).is_finite()); }
     }
     #[test] fn coefficients_are_finite() {
