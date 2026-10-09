@@ -76,8 +76,28 @@ def generate(name: str, package: str, output: Path) -> int:
                 updated = updated.replace("Appbootstrap Android", escape(name))
                 if rel.as_posix() == "app/src/main/res/values/strings.xml":
                     updated = updated.replace(">Appbootstrap<", f">{escape(name)}<")
+            if rel.as_posix() == "AGENTS.md":
+                updated = updated.replace("(extends ../AGENTS.md)", "(standalone project)")
+                updated = updated.replace(
+                    "Read this file and ../AGENTS.md before edits.",
+                    "Read this file and docs/APPBOOTSTRAP-AGENTS.md before edits.",
+                )
+            if rel.as_posix() == "README.md":
+                updated = re.sub(
+                    r"## Make a new app\\n.*?(?=## Automation)",
+                    "## Generated project\\nThis is an independent generated Android app.\\n"
+                    "Configure your features, design, persistence and release credentials.\\n\\n",
+                    updated, flags=re.S,
+                )
             destination.write_text(updated, encoding="utf-8")
             count += 1
+
+        engineering_contract = staging / "docs" / "APPBOOTSTRAP-AGENTS.md"
+        engineering_contract.parent.mkdir(parents=True, exist_ok=True)
+        engineering_contract.write_text(
+            (ROOT / "AGENTS.md").read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        count += 1
 
         workflows = ROOT / ".github" / "workflows"
         target_workflows = staging / ".github" / "workflows"
@@ -86,6 +106,8 @@ def generate(name: str, package: str, output: Path) -> int:
             body = (workflows / filename).read_text(encoding="utf-8")
             body = body.replace("gradle --project-dir android ", "gradle ")
             body = body.replace("android/app/build/", "app/build/")
+            body = body.replace("appbootstrap-android-debug", f"{safe_gradle_name.lower()}-android-debug")
+            body = body.replace("Appbootstrap-", f"{safe_gradle_name}-")
             if filename == "android-ci.yml":
                 body = body.replace(
                     '  push:\n    branches: [android]\n    paths:\n      - "android/**"\n      - ".github/workflows/android-ci.yml"\n  pull_request:\n    paths:\n      - "android/**"\n      - ".github/workflows/android-ci.yml"',
