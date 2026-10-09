@@ -16,6 +16,7 @@ pub struct PcmRing {
     finished: AtomicBool,
     canceled: AtomicBool,
     underruns: AtomicU64,
+    peak_level: AtomicU32,
 }
 
 impl PcmRing {
@@ -30,6 +31,7 @@ impl PcmRing {
             finished: AtomicBool::new(false),
             canceled: AtomicBool::new(false),
             underruns: AtomicU64::new(0),
+            peak_level: AtomicU32::new(0),
         })
     }
 
@@ -79,6 +81,19 @@ impl PcmRing {
     pub fn note_underrun(&self) { self.underruns.fetch_add(1, Ordering::Relaxed); }
 
     pub fn underruns(&self) -> u64 { self.underruns.load(Ordering::Relaxed) }
+
+    /// Lossy analysis telemetry, independent of producer/consumer indices.
+    /// Published at most once per analysis block by the output source.
+    pub fn set_peak_level(&self, normalized_peak: f32) {
+        let peak = if normalized_peak.is_finite() {
+            normalized_peak.clamp(0.0, 1.0)
+        } else { 0.0 };
+        self.peak_level.store(peak.to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn peak_percent(&self) -> f32 {
+        f32::from_bits(self.peak_level.load(Ordering::Relaxed)) * 100.0
+    }
 }
 
 #[cfg(test)]
@@ -125,6 +140,17 @@ mod tests {
         }
         worker.join().unwrap();
         assert!(ring.is_drained());
+    }
+
+    #[test]
+    fn peak_telemetry_is_bounded_and_finite() {
+        let ring = PcmRing::new(4096);
+        ring.set_peak_level(0.75);
+        assert_eq!(ring.peak_percent(), 75.0);
+        ring.set_peak_level(f32::INFINITY);
+        assert_eq!(ring.peak_percent(), 0.0);
+        ring.set_peak_level(42.0);
+        assert_eq!(ring.peak_percent(), 100.0);
     }
 
     #[test]
