@@ -166,8 +166,8 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>) {
             Ok(Command::SetPreamp(db)) => eq.set_preamp(db),
             Ok(Command::SetBass(db)) => eq.set_bass(db),
             Ok(Command::SetTreble(db)) => eq.set_treble(db),
-            Ok(Command::SetLoudness(on)) => eq.loudness.store(on, std::sync::atomic::Ordering::Relaxed),
-            Ok(Command::EnableEq(on)) => eq.enabled.store(on, std::sync::atomic::Ordering::Relaxed),
+            Ok(Command::SetLoudness(on)) => eq.set_loudness(on),
+            Ok(Command::EnableEq(on)) => eq.set_enabled(on),
         }
 
         if let Some(current) = sink.as_ref() {
