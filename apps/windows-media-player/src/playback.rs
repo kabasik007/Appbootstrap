@@ -23,6 +23,7 @@ pub struct PlaybackState {
     pub has_track: bool,
     /// Counts 256-sample starvation windows (not exact hardware callback drops).
     pub buffer_starvations: u64,
+    pub audio_level_percent: f32,
 }
 
 impl Default for PlaybackState {
@@ -36,6 +37,7 @@ impl Default for PlaybackState {
             detail: "Open a local MP3, FLAC, WAV, OGG or M4A file".into(),
             has_track: false,
             buffer_starvations: 0,
+            audio_level_percent: 0.0,
         }
     }
 }
