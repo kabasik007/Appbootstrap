@@ -231,6 +231,31 @@ mod tests {
         assert!(!is_audio(Path::new("readme.txt")));
     }
     #[test]
+    fn recursive_scan_filters_files_and_streams_jsonl() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let folder = std::env::temp_dir().join(format!("zillaplayer-scan-{}-{stamp}", std::process::id()));
+        let nested = folder.join("Плейлист");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(folder.join("music.MP3"), b"test").unwrap();
+        fs::write(nested.join("пісня.flac"), b"test").unwrap();
+        fs::write(nested.join("ignore.txt"), b"test").unwrap();
+
+        let mut result = Vec::<u8>::new();
+        let count = scan_to_writer(&folder, &mut result).unwrap();
+        assert_eq!(count, 2);
+        let output = String::from_utf8(result).unwrap();
+        let mut filenames: Vec<String> = output.lines().map(|line| {
+            let parsed: Option<String> = serde_json::from_str(line).unwrap();
+            PathBuf::from(parsed.unwrap()).file_name().unwrap()
+                .to_string_lossy().to_string()
+        }).collect();
+        filenames.sort();
+        assert_eq!(filenames, vec!["music.MP3", "пісня.flac"]);
+        fs::remove_dir_all(&folder).unwrap();
+    }
+
+    #[test]
     fn scanner_protocol_round_trip_handles_unicode_and_newlines() {
         let path = "C:/Music/Привіт 🎵/strange\nname.mp3";
         let json = serde_json::to_string(&Some(path.to_owned())).unwrap();
