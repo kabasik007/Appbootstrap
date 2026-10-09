@@ -2,6 +2,12 @@
 
 **Версія плану:** 0.1 · **Орієнтир:** Windows 10/11 x64 · **Статус:** запропонований, без фіксованих календарних дат.
 
+> **Roadmap source of truth:** [roadmap/roadmap.json](roadmap/roadmap.json) — 8 milestones and 34 verified-by-evidence engineering tasks. [Live status & backlog](roadmap/STATUS.md) is generated from that JSON. The in-app **Plans** and **Tasks** screens read exactly this bundled data, not invented progress percentages.
+>
+> **Development checkpoint (10 Oct 2026):** Native UI, playback-controller, scanner subprocess, in-memory queue and 31-band DSP are present as source code, but compilation, audible Windows playback, click-free transitions and performance have **not been verified**. Do not mark the corresponding tasks "verified" until their gates pass.
+>
+> **Next priority (strict order):** (1) Windows check/test/release EXE + Cargo.lock; (2) real MP3/FLAC/WAV listening and EQ smoke tests; (3) move decoding and coefficient design off real-time callback; (4) saved playlists/SQLite index; (5) live FFT; (6) separate yt-dlp downloader; (7) plugin API; (8) packaging.
+>
 ## Принципи порядку розробки
 
 Спершу отримати **стабільний локальний аудіоплеєр**, потім професійні DSP і візуалізації, а вже після цього — downloader та зовнішні плагіни. «Комбайн» не повинен ламати просту дію Play/Pause. Кожна фаза дає робочий і перевірний інкремент.
