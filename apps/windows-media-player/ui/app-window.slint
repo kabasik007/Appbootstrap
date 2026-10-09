@@ -58,7 +58,19 @@ export component AppWindow inherits Window {
     background: #07101e;
 
     in-out property <string> active-page: "Player";
-    in-out property <string> notice: "UI prototype only — audio engine is not connected";
+    in-out property <string> notice: "Open a local MP3, FLAC, WAV, OGG or M4A file";
+    in-out property <string> track-title: "No track loaded";
+    in-out property <bool> playing: false;
+    in-out property <bool> has-track: false;
+    in-out property <float> progress-percent: 0;
+    in-out property <float> volume-percent: 80;
+    in-out property <string> elapsed-text: "00:00";
+    in-out property <string> duration-text: "--:--";
+    callback open-file;
+    callback toggle-play;
+    callback stop-playback;
+    callback seek-to(float);
+    callback set-volume(float);
 
     HorizontalLayout {
         spacing: 0px;
@@ -151,22 +163,28 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 padding: 18px;
                                                 spacing: 12px;
-                                                Text { text: "NOW PLAYING   ·   DEMO TRACK"; color: #40baff; font-size: 12px; }
-                                                Text { text: "Neon Tides"; color: #ffffff; font-size: 32px; font-weight: 700; }
-                                                Text { text: "Solaris Drive  •  Astral Horizons"; color: #a8c6e8; font-size: 16px; }
+                                                Text { text: "LOCAL AUDIO   ·   NATIVE WINDOWS OUTPUT"; color: #40baff; font-size: 12px; }
+                                                Text { text: root.track-title; color: #ffffff; font-size: 29px; font-weight: 700; overflow: elide; }
+                                                Text { text: "LOCAL MEDIA  •  file opened from disk"; color: #a8c6e8; font-size: 16px; }
                                                 HorizontalLayout {
                                                     spacing: 8px;
-                                                    Button { text: "◀◀"; clicked => { root.notice = "Previous — waiting for audio engine"; } }
-                                                    Button { text: "▶ Play"; clicked => { root.notice = "Play — waiting for audio engine"; } }
-                                                    Button { text: "▶▶"; clicked => { root.notice = "Next — waiting for audio engine"; } }
+                                                    Button { text: "Open File"; clicked => { root.open-file(); } }
+                                                    Button { text: root.playing ? "❚❚ Pause" : "▶ Play"; enabled: root.has-track; clicked => { root.toggle-play(); } }
+                                                    Button { text: "■ Stop"; enabled: root.has-track; clicked => { root.stop-playback(); } }
                                                     Rectangle { horizontal-stretch: 1; background: #102039; }
                                                 }
-                                                Slider { minimum: 0; maximum: 100; value: 32; enabled: false; }
+                                                Slider {
+                                                    minimum: 0;
+                                                    maximum: 100;
+                                                    value: root.progress-percent;
+                                                    enabled: root.has-track;
+                                                    released(percent) => { root.seek-to(percent); }
+                                                }
                                                 HorizontalLayout {
                                                     spacing: 9px;
-                                                    Text { text: "00:00"; color: #8daaca; }
+                                                    Text { text: root.elapsed-text + " / " + root.duration-text; color: #8daaca; }
                                                     Rectangle { horizontal-stretch: 1; }
-                                                    Text { text: "FLAC   /   24 bit   /   96 kHz"; color: #4fc0ff; font-size: 12px; }
+                                                    Text { text: "RODIO  /  CPAL  /  SYMPHONIA"; color: #4fc0ff; font-size: 12px; }
                                                 }
                                             }
                                         }
@@ -194,7 +212,7 @@ export component AppWindow inherits Window {
                                             padding: 14px;
                                             spacing: 10px;
                                             HorizontalLayout {
-                                                Text { text: "SPECTRUM VISUALIZER"; color: #d7ecff; font-size: 14px; }
+                                                Text { text: "SPECTRUM  ·  ARTWORK PREVIEW (NOT LIVE YET)"; color: #d7ecff; font-size: 14px; }
                                                 Rectangle { horizontal-stretch: 1; }
                                                 Text { text: "Bars  /  Glow  /  60 FPS target"; color: #55aaff; font-size: 12px; }
                                             }
@@ -221,7 +239,7 @@ export component AppWindow inherits Window {
                                                 horizontal-stretch: 1;
                                                 spacing: 8px;
                                                 HorizontalLayout {
-                                                    Text { text: "EQUALIZER  /  10 BAND"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Text { text: "EQUALIZER  /  10 BAND  ·  DSP COMING IN P2"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
                                                     Rectangle { horizontal-stretch: 1; }
                                                     Text { text: "Electronic preset · UI only"; color: #59beff; font-size: 12px; }
                                                 }
@@ -247,8 +265,13 @@ export component AppWindow inherits Window {
                                                 width: 190px;
                                                 spacing: 10px;
                                                 Text { text: "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
-                                                Text { text: "Balance"; color: #9ab7d5; font-size: 12px; }
-                                                Slider { value: 50; }
+                                                Text { text: "Output Volume"; color: #9ab7d5; font-size: 12px; }
+                                                Slider {
+                                                    minimum: 0;
+                                                    maximum: 100;
+                                                    value: root.volume-percent;
+                                                    changed(percent) => { root.set-volume(percent); }
+                                                }
                                                 Button { text: "Bass Boost"; clicked => { root.notice = "DSP control — UI preview"; } }
                                                 Button { text: "Loudness"; clicked => { root.notice = "DSP control — UI preview"; } }
                                                 Button { text: "DSP Presets"; clicked => { root.notice = "DSP presets — planned for P2"; } }
