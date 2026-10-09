@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "Source changes for control-thread EQ coefficient snapshots and child-process lifetime are committed, but no passing Windows toolchain run or audio measurements are confirmed.",
+  "status_note": "Child-process cancellation and 31-band DSP atomics reworked; M3U/M3U8 import/export added. All Windows builds and audio benchmarks remain unverified.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -168,8 +168,8 @@
           "id": "ZP-304",
           "title": "M3U/M3U8 import/export and proper track queue selection",
           "priority": "medium",
-          "status": "todo",
-          "verification": "Unicode paths and playlist round-trips"
+          "status": "implemented_unverified",
+          "verification": "M3U/M3U8 UTF-8 import/export, relative paths and Unicode roundtrip tests added; still requires Windows UI/large playlist smoke"
         },
         {
           "id": "ZP-305",
