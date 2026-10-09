@@ -85,6 +85,11 @@ export component AppWindow inherits Window {
     callback enable-eq(bool);
     in-out property <[string]> library-items: [];
     in-out property <string> library-count: "0 tracks";
+    in property <[string]> roadmap-items: [];
+    in property <[string]> focus-tasks: [];
+    in property <string> roadmap-summary: "Loading roadmap...";
+    in property <string> task-summary: "Loading tasks...";
+    in property <string> next-gate: "Windows build verification pending";
     in-out property <bool> equalizer-enabled: true;
     in-out property <bool> loudness-enabled: false;
 
@@ -372,10 +377,10 @@ export component AppWindow inherits Window {
                                 if root.active-page == "Tasks" : VerticalLayout {
                                     spacing: 14px;
                                     Text { text: "Engineering Tasks"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "Roadmap work items — a static prototype, not a project tracker"; color: #9ab4d2; font-size: 15px; }
+                                    Text { text: "Read-only engineering backlog · bundled roadmap/roadmap.json"; color: #9ab4d2; font-size: 15px; }
                                     HorizontalLayout {
                                         spacing: 12px;
-                                        for stat in ["OPEN  8", "IN PROGRESS  0", "BLOCKED  0", "COMPLETED  0"] : Rectangle {
+                                        for stat in [root.task-summary, root.roadmap-summary, root.next-gate] : Rectangle {
                                             background: #142641;
                                             border-radius: 10px;
                                             height: 91px;
@@ -392,20 +397,11 @@ export component AppWindow inherits Window {
                                             spacing: 18px;
                                             Text { text: "BACKLOG                     MODULE                         STATUS"; color: #7ca9d7; font-size: 15px; }
                                             Rectangle { height: 1px; background: #294361; }
-                                            for task in [
-                                                "P0  Verify Rust / Slint Windows build",
-                                                "P1  WASAPI output and decode workers",
-                                                "P2  DSP / parametric equalizer",
-                                                "P3  Library and playlists",
-                                                "P4  Spectrum and oscilloscope",
-                                                "P5  yt-dlp downloader isolation",
-                                                "P6  External plugin protocol",
-                                                "P7  MSI / release testing"
-                                            ] : Rectangle {
+                                            for task in root.focus-tasks : Rectangle {
                                                 height: 49px;
                                                 background: #132945;
                                                 border-radius: 7px;
-                                                Text { text: task + "    ·    PLANNED"; x: 12px; color: #d3eaff; height: parent.height; vertical-alignment: center; font-size: 16px; }
+                                                Text { text: task; x: 12px; color: #d3eaff; height: parent.height; width: parent.width - 24px; vertical-alignment: center; font-size: 14px; overflow: elide; }
                                             }
                                         }
                                     }
@@ -413,15 +409,15 @@ export component AppWindow inherits Window {
                                 if root.active-page == "Plans" : VerticalLayout {
                                     spacing: 14px;
                                     Text { text: "Product Roadmap"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "P0 to P7 — development stages, dates pending measurement"; color: #99b6d8; font-size: 16px; }
+                                    Text { text: root.roadmap-summary + " · no fabricated progress percentages"; color: #99b6d8; font-size: 16px; }
                                     HorizontalLayout {
                                         spacing: 12px;
-                                        for stat in ["P0  ARCHITECTURE", "NEXT  PLAYBACK", "RISK  DEVICE I/O"] : Rectangle {
+                                        for stat in [root.roadmap-summary, root.task-summary, root.next-gate] : Rectangle {
                                             height: 90px;
                                             background: #152744;
                                             border-radius: 11px;
                                             horizontal-stretch: 1;
-                                            Text { text: stat; color: #dcecff; height: parent.height; x: 17px; font-size: 17px; vertical-alignment: center; }
+                                            Text { text: stat; color: #dcecff; height: parent.height; x: 13px; width: parent.width - 26px; font-size: 14px; vertical-alignment: center; wrap: word-wrap; }
                                         }
                                     }
                                     Rectangle {
@@ -431,25 +427,15 @@ export component AppWindow inherits Window {
                                         VerticalLayout {
                                             padding: 17px;
                                             spacing: 16px;
-                                            Text { text: "ROADMAP MILESTONES     ·     all not yet shipped"; color: #4ab9ff; font-size: 16px; }
-                                            for plan in [
-                                                "P0     Toolchain, feasibility, benchmarks",
-                                                "P1     MP3 / FLAC / WAV playback",
-                                                "P2     Equalizer and DSP",
-                                                "P3     Library, playlists, metadata",
-                                                "P4     Visualizations, themes, hotkeys",
-                                                "P5     yt-dlp download manager",
-                                                "P6     Extensions and plugins",
-                                                "P7     Installer, beta and release"
-                                            ] : Rectangle {
+                                            Text { text: "ROADMAP P0–P7     ·     status from repository source"; color: #4ab9ff; font-size: 16px; }
+                                            for plan in root.roadmap-items : Rectangle {
                                                 height: 54px;
                                                 background: #162c4b;
                                                 border-radius: 8px;
                                                 HorizontalLayout {
                                                     padding-left: 17px;
                                                     padding-right: 17px;
-                                                    Text { text: plan; color: #e5f4ff; vertical-alignment: center; horizontal-stretch: 1; font-size: 17px; }
-                                                    Text { text: "PLANNED"; color: #59aaff; vertical-alignment: center; font-size: 12px; }
+                                                    Text { text: plan; color: #e5f4ff; vertical-alignment: center; horizontal-stretch: 1; font-size: 16px; overflow: elide; }
                                                 }
                                             }
                                         }
