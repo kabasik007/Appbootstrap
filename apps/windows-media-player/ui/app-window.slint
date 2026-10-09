@@ -69,6 +69,7 @@ export component AppWindow inherits Window {
     in-out property <string> elapsed-text: "00:00";
     in-out property <string> duration-text: "--:--";
     in-out property <float> audio-level: 0;
+    in property <[float]> spectrum-bars: [];
     callback open-file;
     callback toggle-play;
     callback stop-playback;
@@ -240,16 +241,16 @@ export component AppWindow inherits Window {
                                             padding: 14px;
                                             spacing: 10px;
                                             HorizontalLayout {
-                                                Text { text: "SPECTRUM PREVIEW  ·  LIVE PCM PEAK BELOW"; color: #d7ecff; font-size: 14px; }
+                                                Text { text: "LIVE FFT SPECTRUM  ·  32 LOG FREQUENCY BANDS"; color: #d7ecff; font-size: 14px; }
                                                 Rectangle { horizontal-stretch: 1; }
-                                                Text { text: "Bars  /  Glow  /  60 FPS target"; color: #55aaff; font-size: 12px; }
+                                                Text { text: "RustFFT  /  20 FPS UI  /  isolated worker"; color: #55aaff; font-size: 12px; }
                                             }
                                             HorizontalLayout {
                                                 spacing: 5px;
                                                 alignment: center;
-                                                for bar in [25, 43, 62, 44, 73, 81, 54, 37, 65, 91, 74, 61, 35, 48, 71, 84, 93, 57, 42, 54, 77, 69, 88, 52, 38, 70, 94, 60, 78, 41, 58, 82, 67, 49, 73, 86, 55, 37, 61, 80, 47, 62, 35, 73, 88, 53, 71, 44] : Rectangle {
-                                                    width: 8px;
-                                                    height: bar * 1px;
+                                                for bar in root.spectrum-bars : Rectangle {
+                                                    width: 11px;
+                                                    height: 3px + bar * 1px;
                                                     background: bar > 70 ? #28d9ff : #356aff;
                                                     border-radius: 3px;
                                                 }
