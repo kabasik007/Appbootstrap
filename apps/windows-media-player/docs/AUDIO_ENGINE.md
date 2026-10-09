@@ -1,44 +1,34 @@
-# Audio engine — evolving implementation
+# Audio engine — current and target
 
-## Current P1 alpha
-The first playable implementation uses **Rodio 0.21.1**, which builds on CPAL for device playback and Symphonia for default codecs. A dedicated Rust control thread receives Slint commands over `std::sync::mpsc`; a bounded status channel with `try_send` sends UI snapshots at 200 ms intervals.
+## Current P1/P2 code (unverified on Windows)
 
-Current path:
+Slint UI sends commands to an audio CONTROL worker using mpsc. That worker owns Rodio Sink/OutputStream handles, performs user-requested pause/resume, stop, local file open and seek, and applies raised-cosine fades (about 50–70 ms) to avoid abrupt changes. A bounded channel sends playback snapshots back to the Slint UI timer.
 
-```
-Slint UI → mpsc Commands → audio control worker
-                             │ File::open + rodio::Decoder (Symphonia)
-                             │ Sink (play/pause/stop/seek/volume)
-                             └→ OutputStreamBuilder → CPAL → WASAPI
-Slint UI ← bounded mpsc snapshot channel ← worker
-```
+Audio source wraps Rodio Decoder in the ZillaPlayer EqSource adapter. EQ uses 31 peaking bands with per-channel state and smoothed coefficient changes, bass/treble shelves, a loudness contour and an optional bypass. Main UI controls 15 of the 31 EQ bands; 31-band advanced editor and saved presets remain pending.
 
-The current alpha does **not** yet expose raw PCM blocks or any working DSP/FFT tap. It must not be marketed as a custom low-latency audio engine until validated.
+## Important hard real-time caveat
 
-## Planned P2–P4 custom DSP topology
+The existing Rodio Source is still consumed on the audio mixing/output path. Decoding or I/O *might* happen during output callbacks: the control worker only isolates device setup and transport commands. Some EQ coefficient trig calculations also occur at parameter refresh. Do not claim this is completely non-blocking or hard RT safe.
 
-1. File selection / transport command.
-2. Probe container and codec with Symphonia off UI thread.
-3. Decode worker produces PCM; validate sample rate, channel layout, timestamps.
-4. Convert channel layout/sample format and resample off time-critical callback.
-5. Push blocks into a bounded, preallocated SPSC buffer with generation/seek epoch.
-6. cpal/WASAPI callback pulls from buffer → volume/gain → preallocated EQ → limiter → device.
-7. Tap compact PCM/VU snapshots into a **droppable** ring to the FFT worker.
+## Target after Windows build is verified
 
-## Transport state and lifetime
-Idle → Playing ↔ Paused → Stopped. Open another valid file atomically replaces current track; an invalid file is rejected while current track continues. Stop retains a restartable file path in process memory.
+    Slint → asynchronous control commands
+               ↓
+    decode worker with disk reads and seek generation
+               ↓
+    preallocated bounded SPSC PCM ring
+               ↓
+    CPAL/WASAPI output callback (no allocations, blocking I/O or mutexes)
+               ↓
+    prebuilt EQ coeff snapshots + gain envelope → output
+               └→ loss-tolerant FFT analysis worker → throttled UI
 
-Store all output stream and sink handles within the control worker and ensure they remain alive while playing. Only documented control operations are allowed across the UI thread; closing the UI terminates the command channel and audio worker.
+Moving parameter coefficient creation to control thread is required before declaring the EQ callback strictly real-time-safe. Test seek cancellation and stale data discard with generation counters. Measure underruns, latency, memory, CPU and concurrent folder scanning on a real Windows system.
 
-## Pending engineering validation
-- Make rustc/cargo Windows build pass with pinned dependencies and checked lockfile.
-- Exercise MP3 VBR, FLAC, WAV, seek, bad file, device absent, unplug/replug, repeated play/pause.
-- Benchmark callback deadlines, CPU, memory and dropped buffers on target hardware.
-- Add rate/channel conversion, true gapless timing, device-change recovery and prebuffer tuning.
-- Separate visualizer performance from the audio path.
+## Tests needed before release
 
-## Acceptance (not yet met)
-- 500 repeated play/pause/seek/stop transitions and long playback without crashes.
-- Continuous output on stable test hardware during UI interactions, library indexing and downloads.
-- No allocations/locks in any future custom real-time callbacks.
-- All claims must be supported with actual benchmark logs.
+- Windows cargo check, cargo test, release build and MP3/FLAC/WAV fixtures
+- 500 rapid seek/pause/track transitions
+- Eight-hour playback soak with 50k music files being indexed
+- Device unplug/replug, corrupt media and invalid/remote folder
+- Smooth audible fade without clicks and real effect from every 31-band setting
