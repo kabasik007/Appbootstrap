@@ -83,12 +83,16 @@ def generate(name: str, package: str, output: Path) -> int:
                     "Read this file and docs/APPBOOTSTRAP-AGENTS.md before edits.",
                 )
             if rel.as_posix() == "README.md":
-                updated = re.sub(
-                    r"## Make a new app\\n.*?(?=## Automation)",
-                    "## Generated project\\nThis is an independent generated Android app.\\n"
-                    "Configure your features, design, persistence and release credentials.\\n\\n",
-                    updated, flags=re.S,
-                )
+                before, separator, after = updated.partition("## Make a new app")
+                if separator:
+                    _, marker, tail = after.partition("## Automation")
+                    if marker:
+                        updated = (
+                            before + "## Generated project" + chr(10)
+                            + "Independent generated Android application. Configure features "
+                            + "and signing for your product." + chr(10) * 2
+                            + marker + tail
+                        )
             destination.write_text(updated, encoding="utf-8")
             count += 1
 
