@@ -20,6 +20,7 @@ impl PlayQueue {
         }
     }
     pub fn count(&self) -> usize { self.files.len() }
+    pub fn snapshot(&self) -> Vec<PathBuf> { self.files.clone() }
     pub fn select(&mut self, index: usize) -> Option<PathBuf> {
         let result = self.files.get(index)?.clone();
         self.selected = Some(index);
