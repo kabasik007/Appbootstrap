@@ -9,11 +9,13 @@ mod pcm_ring;
 mod playlist;
 mod queue;
 mod roadmap;
+mod session;
 
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
 use playback::{format_duration, Transport};
 use queue::PlayQueue;
+use session::{SavedSession, SessionStore};
 use slint::{ComponentHandle, Model, SharedString, VecModel};
 use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc,
     sync::mpsc::{self, Sender}, thread, time::Duration};
@@ -79,14 +81,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let queue = Rc::new(RefCell::new(PlayQueue::default()));
     let model: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
     ui.set_library_items(model.clone().into());
+    // Single background session I/O worker. All disk reads/writes stay off UI.
+    let session = Rc::new(SessionStore::start()?);
+    let session_dirty = Rc::new(Cell::new(false));
+    let user_touched_queue = Rc::new(Cell::new(false));
     let (playlist_tx, playlist_rx) = mpsc::channel::<PlaylistEvent>();
 
     let import_tx = playlist_tx.clone();
+    let imported_before_restore = user_touched_queue.clone();
     ui.on_import_playlist(move || {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("M3U playlists", &["m3u", "m3u8"])
             .pick_file()
         {
+            imported_before_restore.set(true);
             import_playlist_job(path, import_tx.clone());
         }
     });
@@ -107,10 +115,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cmd = commands.clone();
     let q = queue.clone();
     let rows = model.clone();
+    let touched = user_touched_queue.clone();
+    let dirty = session_dirty.clone();
     ui.on_open_file(move || {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Audio", &["mp3","flac","wav","ogg","m4a","aac","opus"]).pick_file()
         {
+            touched.set(true);
+            dirty.set(true);
             q.borrow_mut().append_selected(path.clone());
             refresh_list(&q, &rows);
             let _ = cmd.send(Command::Open(path));
@@ -122,9 +134,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let q = queue.clone();
     let rows = model.clone();
     let weak = ui.as_weak();
+    let touched = user_touched_queue.clone();
+    let dirty = session_dirty.clone();
     ui.on_open_folder(move || {
         // Native modal file/folder chooser is explicitly user initiated.
         if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+            touched.set(true);
+            dirty.set(true);
             q.borrow_mut().clear();
             rows.set_vec(Vec::new());
             let id = folder_cmd.scan(folder);
@@ -147,22 +163,32 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let q = queue.clone();
     let cmd = commands.clone();
+    let dirty = session_dirty.clone();
     ui.on_play_library_track(move |index| {
         if index >= 0 {
             if let Some(path) = q.borrow_mut().select(index as usize) {
+                dirty.set(true);
                 let _ = cmd.send(Command::Open(path));
             }
         }
     });
     let q = queue.clone();
     let cmd = commands.clone();
+    let dirty = session_dirty.clone();
     ui.on_next_track(move || {
-        if let Some(path) = q.borrow_mut().next() { let _ = cmd.send(Command::Open(path)); }
+        if let Some(path) = q.borrow_mut().next() {
+            dirty.set(true);
+            let _ = cmd.send(Command::Open(path));
+        }
     });
     let q = queue.clone();
     let cmd = commands.clone();
+    let dirty = session_dirty.clone();
     ui.on_previous_track(move || {
-        if let Some(path) = q.borrow_mut().previous() { let _ = cmd.send(Command::Open(path)); }
+        if let Some(path) = q.borrow_mut().previous() {
+            dirty.set(true);
+            let _ = cmd.send(Command::Open(path));
+        }
     });
 
     let cmd = commands.clone();
@@ -187,11 +213,33 @@ fn main() -> Result<(), Box<dyn Error>> {
     // UI only: consume ready messages without blocking. No scanning or decoding.
     let scanner_shutdown = scanner.clone();
     let command_shutdown = commands.clone();
+    let session_for_updates = Rc::clone(&session);
+    let dirty_for_updates = Rc::clone(&session_dirty);
+    let touched_before_restore = Rc::clone(&user_touched_queue);
+    let session_shutdown_queue = Rc::clone(&queue);
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(200), move || {
         let Some(window) = weak.upgrade() else { return };
+        // Restore only if user has not already started a scan or changed the queue.
+        // Loading happens in the persistence worker; nothing reads disk here.
+        if let Some(loaded) = session_for_updates.poll_loaded() {
+            match loaded {
+                Ok(state) if !touched_before_restore.get() => {
+                    let selected = state.selected;
+                    queue.borrow_mut().clear();
+                    queue.borrow_mut().append(state.tracks);
+                    if let Some(index) = selected { let _ = queue.borrow_mut().select(index); }
+                    refresh_list(&queue, &model);
+                    let count = queue.borrow().count();
+                    window.set_library_count(format!("{count} tracks").into());
+                    window.set_notice(format!("Restored {count} tracks from previous session").into());
+                }
+                Ok(_) => {} // User action has priority over stale session loading.
+                Err(reason) => window.set_notice(format!("Session recovery: {reason}").into()),
+            }
+        }
         // Local M3U I/O happens on dedicated threads; apply models on UI thread.
         for _ in 0..8 {
             match playlist_rx.try_recv() {
@@ -201,6 +249,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     let size = paths.len();
                     queue.borrow_mut().clear();
                     queue.borrow_mut().append(paths);
+                    dirty_for_updates.set(true);
                     refresh_list(&queue, &model);
                     window.set_library_count(format!("{size} tracks").into());
                     window.set_notice(format!("Imported {size} playlist entries").into());
@@ -227,6 +276,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     window.set_library_count(format!("{} tracks", queue.borrow().count()).into());
                 }
                 ScanEvent::Done(id,total) if id == scan_serial.get() => {
+                    dirty_for_updates.set(true);
                     window.set_library_count(format!("{total} tracks").into());
                     window.set_notice(format!("Library scan complete: {total} audio files").into());
                 }
@@ -250,14 +300,30 @@ fn main() -> Result<(), Box<dyn Error>> {
             if state.transport == Transport::Playing { pending_advance.set(false); }
             if state.transport == Transport::Stopped && state.detail == "Track finished" && !pending_advance.get() {
                 pending_advance.set(true);
-                if let Some(path) = queue.borrow_mut().next() { let _ = commands.send(Command::Open(path)); }
+                if let Some(path) = queue.borrow_mut().next() {
+                    dirty_for_updates.set(true);
+                    let _ = commands.send(Command::Open(path));
+                }
             }
+        }
+        if dirty_for_updates.replace(false) {
+            let snapshot = {
+                let q = queue.borrow();
+                SavedSession { tracks: q.snapshot(), selected: q.selected_index() }
+            };
+            session_for_updates.enqueue_save(snapshot);
         }
     });
 
     ui.run()?;
     scanner_shutdown.shutdown();
     let _ = command_shutdown.send(Command::Shutdown);
+    // Flush the latest state and join I/O worker before exiting.
+    let final_snapshot = {
+        let q = session_shutdown_queue.borrow();
+        SavedSession { tracks: q.snapshot(), selected: q.selected_index() }
+    };
+    session.shutdown(final_snapshot);
     Ok(())
 }
 
