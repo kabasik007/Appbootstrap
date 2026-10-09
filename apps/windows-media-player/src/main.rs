@@ -4,6 +4,7 @@ mod audio;
 mod dsp;
 mod library;
 mod playback;
+mod playlist;
 mod queue;
 mod roadmap;
 
@@ -12,9 +13,35 @@ use library::{LibraryScanner, ScanEvent};
 use playback::{format_duration, Transport};
 use queue::PlayQueue;
 use slint::{ComponentHandle, Model, SharedString, VecModel};
-use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc, time::Duration};
+use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc,
+    sync::mpsc::{self, Sender}, thread, time::Duration};
 
 slint::include_modules!();
+
+enum PlaylistEvent {
+    Imported(Result<Vec<PathBuf>, String>),
+    Saved(Result<usize, String>),
+}
+
+fn import_playlist_job(path: PathBuf, replies: Sender<PlaylistEvent>) {
+    let _ = thread::Builder::new()
+        .name("zillaplayer-playlist-import".into())
+        .spawn(move || {
+            let outcome = playlist::read(&path).map_err(|error| error.to_string());
+            let _ = replies.send(PlaylistEvent::Imported(outcome));
+        });
+}
+
+fn save_playlist_job(path: PathBuf, tracks: Vec<PathBuf>, replies: Sender<PlaylistEvent>) {
+    let _ = thread::Builder::new()
+        .name("zillaplayer-playlist-save".into())
+        .spawn(move || {
+            let count = tracks.len();
+            let outcome = playlist::write(&path, &tracks)
+                .map(|()| count).map_err(|error| error.to_string());
+            let _ = replies.send(PlaylistEvent::Saved(outcome));
+        });
+}
 
 const EQ_VISIBLE_MAP: [usize; 15] = [0,2,4,6,8,10,12,14,16,18,20,22,24,27,30];
 
@@ -50,6 +77,30 @@ fn main() -> Result<(), Box<dyn Error>> {
     let queue = Rc::new(RefCell::new(PlayQueue::default()));
     let model: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
     ui.set_library_items(model.clone().into());
+    let (playlist_tx, playlist_rx) = mpsc::channel::<PlaylistEvent>();
+
+    let import_tx = playlist_tx.clone();
+    ui.on_import_playlist(move || {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("M3U playlists", &["m3u", "m3u8"])
+            .pick_file()
+        {
+            import_playlist_job(path, import_tx.clone());
+        }
+    });
+
+    let save_tx = playlist_tx.clone();
+    let save_queue = Rc::clone(&queue);
+    ui.on_export_playlist(move || {
+        if let Some(mut path) = rfd::FileDialog::new()
+            .add_filter("M3U8 playlists", &["m3u8"])
+            .set_file_name("ZillaPlayer.m3u8")
+            .save_file()
+        {
+            if path.extension().is_none() { path.set_extension("m3u8"); }
+            save_playlist_job(path, save_queue.borrow().snapshot(), save_tx.clone());
+        }
+    });
 
     let cmd = commands.clone();
     let q = queue.clone();
@@ -139,6 +190,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     let pending_advance = Rc::new(Cell::new(false));
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(200), move || {
         let Some(window) = weak.upgrade() else { return };
+        // Local M3U I/O happens on dedicated threads; apply models on UI thread.
+        for _ in 0..8 {
+            match playlist_rx.try_recv() {
+                Ok(PlaylistEvent::Imported(Ok(paths))) => {
+                    scanner.cancel();
+                    scan_serial.set(0);
+                    let size = paths.len();
+                    queue.borrow_mut().clear();
+                    queue.borrow_mut().append(paths);
+                    refresh_list(&queue, &model);
+                    window.set_library_count(format!("{size} tracks").into());
+                    window.set_notice(format!("Imported {size} playlist entries").into());
+                }
+                Ok(PlaylistEvent::Imported(Err(reason))) => {
+                    window.set_notice(format!("Playlist import error: {reason}").into());
+                }
+                Ok(PlaylistEvent::Saved(Ok(count))) => {
+                    window.set_notice(format!("Saved {count} M3U8 entries").into());
+                }
+                Ok(PlaylistEvent::Saved(Err(reason))) => {
+                    window.set_notice(format!("Playlist export error: {reason}").into());
+                }
+                Err(_) => break,
+            }
+        }
         // Bounded channel: at most 64 scan batches buffered at any time.
         for _ in 0..32 {
             let Ok(event) = scanner.updates.try_recv() else { break };
