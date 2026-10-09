@@ -34,3 +34,10 @@ jobs:
         run: cargo test
       - name: Build release executable
         run: cargo build --release
+      - name: Upload unsigned development build
+        uses: actions/upload-artifact@v4
+        with:
+          name: zillaplayer-windows-x64-alpha-unsigned
+          path: apps/windows-media-player/target/release/zillaplayer.exe
+          if-no-files-found: error
+          retention-days: 14
