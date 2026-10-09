@@ -1,0 +1,436 @@
+
+import { Button, Slider, LineEdit } from "std-widgets.slint";
+
+component NavigationItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    callback activated;
+    height: 47px;
+    background: selected ? #173c77 : #0b182b;
+    border-radius: 9px;
+    Text {
+        text: root.label;
+        color: root.selected ? #ffffff : #c2d5ee;
+        font-size: 17px;
+        x: 18px;
+        height: parent.height;
+        vertical-alignment: center;
+    }
+    TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
+component TitleLabel inherits Text {
+    in property <string> caption;
+    text: caption;
+    color: #eef5ff;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+component TrackLine inherits Rectangle {
+    in property <string> number;
+    in property <string> title;
+    in property <string> artist;
+    height: 43px;
+    background: #102039;
+    border-radius: 6px;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 9px;
+        Text { text: root.number; width: 22px; color: #3faaff; vertical-alignment: center; }
+        VerticalLayout {
+            spacing: 1px;
+            Text { text: root.title; font-size: 13px; color: #f1f6ff; }
+            Text { text: root.artist; font-size: 11px; color: #8ea6c9; }
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "ZillaPlayer — native Windows UI prototype";
+    width: 1510px;
+    height: 920px;
+    min-width: 1180px;
+    min-height: 780px;
+    background: #07101e;
+
+    in-out property <string> active-page: "Player";
+    in-out property <string> notice: "UI prototype only — audio engine is not connected";
+
+    HorizontalLayout {
+        spacing: 0px;
+        Rectangle {
+            width: 220px;
+            background: #0b1525;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+                Rectangle {
+                    height: 78px;
+                    background: #0b1525;
+                    VerticalLayout {
+                        spacing: 3px;
+                        Text { text: "Z  ZillaPlayer"; color: #d5e9ff; font-size: 27px; font-weight: 700; }
+                        Text { text: "RUST  /  WINDOWS  /  P0"; color: #36a8ff; font-size: 10px; }
+                    }
+                }
+                NavigationItem { label: "▶   Player"; selected: root.active-page == "Player"; activated => { root.active-page = "Player"; } }
+                NavigationItem { label: "♫   Library"; selected: root.active-page == "Library"; activated => { root.active-page = "Library"; } }
+                NavigationItem { label: "↓   Downloads"; selected: root.active-page == "Downloads"; activated => { root.active-page = "Downloads"; } }
+                NavigationItem { label: "☑   Tasks"; selected: root.active-page == "Tasks"; activated => { root.active-page = "Tasks"; } }
+                NavigationItem { label: "◇   Plans"; selected: root.active-page == "Plans"; activated => { root.active-page = "Plans"; } }
+                NavigationItem { label: "⚙   Settings"; selected: root.active-page == "Settings"; activated => { root.active-page = "Settings"; } }
+                Rectangle { vertical-stretch: 1; background: #0b1525; }
+                Rectangle {
+                    height: 170px;
+                    border-radius: 10px;
+                    background: #102e58;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        Rectangle { height: 45px; background: #143f7a; border-radius: 10px; }
+                        Text { text: "MUSIC"; color: #35a4ff; font-size: 16px; }
+                        Text { text: "HIGHER  /  FURTHER"; color: #cbdfff; font-size: 12px; }
+                        Text { text: "TOGETHER"; color: #8ccaff; font-size: 15px; }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            background: #080f1c;
+            HorizontalLayout {
+                spacing: 0px;
+                Rectangle {
+                    background: #080f1c;
+                    HorizontalLayout {
+                        spacing: 0px;
+                        Rectangle {
+                            background: #080f1c;
+                            VerticalLayout {
+                                padding: 13px;
+                                spacing: 13px;
+                                Rectangle {
+                                    height: 56px;
+                                    background: #101e32;
+                                    border-radius: 10px;
+                                    HorizontalLayout {
+                                        padding-left: 18px;
+                                        padding-right: 14px;
+                                        spacing: 16px;
+                                        Text { text: "⌕   Search music, artists, downloads..."; color: #809abb; vertical-alignment: center; horizontal-stretch: 1; font-size: 16px; }
+                                        Text { text: "♫  Windows Audio"; color: #43caff; vertical-alignment: center; font-size: 14px; }
+                                        Text { text: "●"; color: #00cfb7; vertical-alignment: center; font-size: 18px; }
+                                    }
+                                }
+                                if root.active-page == "Player" : VerticalLayout {
+                                    spacing: 12px;
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Rectangle {
+                                            width: 246px;
+                                            height: 242px;
+                                            background: #152e5b;
+                                            border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 20px;
+                                                spacing: 10px;
+                                                Text { text: "ASTRAL"; font-size: 25px; font-weight: 700; color: #e6faff; }
+                                                Text { text: "HORIZONS"; font-size: 18px; color: #9ecbff; }
+                                                Rectangle { background: #214d9b; vertical-stretch: 1; border-radius: 10px; }
+                                                Text { text: "SOLARIS DRIVE"; color: #9ebbd6; font-size: 12px; }
+                                            }
+                                        }
+                                        Rectangle {
+                                            height: 242px;
+                                            background: #102039;
+                                            border-radius: 12px;
+                                            horizontal-stretch: 1;
+                                            VerticalLayout {
+                                                padding: 18px;
+                                                spacing: 12px;
+                                                Text { text: "NOW PLAYING   ·   DEMO TRACK"; color: #40baff; font-size: 12px; }
+                                                Text { text: "Neon Tides"; color: #ffffff; font-size: 32px; font-weight: 700; }
+                                                Text { text: "Solaris Drive  •  Astral Horizons"; color: #a8c6e8; font-size: 16px; }
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    Button { text: "◀◀"; clicked => { root.notice = "Previous — waiting for audio engine"; } }
+                                                    Button { text: "▶ Play"; clicked => { root.notice = "Play — waiting for audio engine"; } }
+                                                    Button { text: "▶▶"; clicked => { root.notice = "Next — waiting for audio engine"; } }
+                                                    Rectangle { horizontal-stretch: 1; background: #102039; }
+                                                }
+                                                Slider { minimum: 0; maximum: 100; value: 32; enabled: false; }
+                                                HorizontalLayout {
+                                                    spacing: 9px;
+                                                    Text { text: "00:00"; color: #8daaca; }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                    Text { text: "FLAC   /   24 bit   /   96 kHz"; color: #4fc0ff; font-size: 12px; }
+                                                }
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 284px;
+                                            height: 242px;
+                                            background: #102039;
+                                            border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px;
+                                                spacing: 7px;
+                                                Text { text: "PLAYLIST  /  QUEUE"; color: #f2f7ff; font-size: 16px; font-weight: 700; }
+                                                TrackLine { number: "01"; title: "Neon Tides"; artist: "Solaris Drive"; }
+                                                TrackLine { number: "02"; title: "Echoes in Parallel"; artist: "Lume"; }
+                                                TrackLine { number: "03"; title: "Gravity Well"; artist: "CYAN"; }
+                                                TrackLine { number: "04"; title: "Midnight Protocol"; artist: "Tessera"; }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 164px;
+                                        background: #0e203c;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px;
+                                            spacing: 10px;
+                                            HorizontalLayout {
+                                                Text { text: "SPECTRUM VISUALIZER"; color: #d7ecff; font-size: 14px; }
+                                                Rectangle { horizontal-stretch: 1; }
+                                                Text { text: "Bars  /  Glow  /  60 FPS target"; color: #55aaff; font-size: 12px; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 5px;
+                                                alignment: center;
+                                                for bar in [25, 43, 62, 44, 73, 81, 54, 37, 65, 91, 74, 61, 35, 48, 71, 84, 93, 57, 42, 54, 77, 69, 88, 52, 38, 70, 94, 60, 78, 41, 58, 82, 67, 49, 73, 86, 55, 37, 61, 80, 47, 62, 35, 73, 88, 53, 71, 44] : Rectangle {
+                                                    width: 8px;
+                                                    height: bar * 1px;
+                                                    background: bar > 70 ? #28d9ff : #356aff;
+                                                    border-radius: 3px;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 253px;
+                                        background: #102039;
+                                        border-radius: 12px;
+                                        HorizontalLayout {
+                                            padding: 14px;
+                                            spacing: 15px;
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 8px;
+                                                HorizontalLayout {
+                                                    Text { text: "EQUALIZER  /  10 BAND"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                    Text { text: "Electronic preset · UI only"; color: #59beff; font-size: 12px; }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 4px;
+                                                    alignment: center;
+                                                    for hz[i] in ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"] : VerticalLayout {
+                                                        width: 54px;
+                                                        spacing: 6px;
+                                                        Slider {
+                                                            orientation: vertical;
+                                                            minimum: -12;
+                                                            maximum: 12;
+                                                            value: (i - 4) * 0.7;
+                                                            height: 132px;
+                                                        }
+                                                        Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 12px; }
+                                                    }
+                                                }
+                                            }
+                                            Rectangle { width: 1px; background: #284362; }
+                                            VerticalLayout {
+                                                width: 190px;
+                                                spacing: 10px;
+                                                Text { text: "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
+                                                Text { text: "Balance"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { value: 50; }
+                                                Button { text: "Bass Boost"; clicked => { root.notice = "DSP control — UI preview"; } }
+                                                Button { text: "Loudness"; clicked => { root.notice = "DSP control — UI preview"; } }
+                                                Button { text: "DSP Presets"; clicked => { root.notice = "DSP presets — planned for P2"; } }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Downloads" : VerticalLayout {
+                                    spacing: 14px;
+                                    Text { text: "Downloads"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "Media URLs, formats, playlists and jobs · UI preview"; color: #9ab4d2; font-size: 16px; }
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        url-input := LineEdit {
+                                            placeholder-text: "Paste an authorized video, audio or playlist URL...";
+                                            horizontal-stretch: 1;
+                                        }
+                                        Button {
+                                            text: "Analyze";
+                                            clicked => { root.notice = "yt-dlp integration is planned for P5 — no URL was fetched"; }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        for stat in ["IN QUEUE     0", "ACTIVE     0", "FINISHED     0", "DISK USED     0 B"] : Rectangle {
+                                            height: 89px;
+                                            background: #12243e;
+                                            border-radius: 10px;
+                                            horizontal-stretch: 1;
+                                            Text { text: stat; x: 15px; color: #c1e3ff; vertical-alignment: center; height: parent.height; font-size: 16px; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 215px;
+                                        background: #12243e;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 18px;
+                                            spacing: 14px;
+                                            Text { text: "SOURCE PREVIEW"; color: #48b5ff; font-size: 15px; }
+                                            Text { text: "No source analyzed"; color: #ffffff; font-size: 25px; }
+                                            Text { text: "Analyze a permitted media URL once the yt-dlp adapter is implemented."; color: #91adcd; font-size: 14px; }
+                                            HorizontalLayout {
+                                                spacing: 9px;
+                                                Button { text: "Audio / MP3"; clicked => { root.notice = "Format profiles not connected"; } }
+                                                Button { text: "Best Video"; clicked => { root.notice = "Format profiles not connected"; } }
+                                                Button { text: "Playlist"; clicked => { root.notice = "Playlist analysis not connected"; } }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        background: #101f35;
+                                        vertical-stretch: 1;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 16px;
+                                            spacing: 12px;
+                                            Text { text: "DOWNLOAD QUEUE"; color: #edf5ff; font-size: 18px; }
+                                            Rectangle { height: 1px; background: #294361; }
+                                            Text { text: "Item                                 Status                       Progress              Speed                 Actions"; color: #87a8c7; font-size: 13px; }
+                                            Rectangle { height: 1px; background: #294361; }
+                                            Text { text: "No jobs yet. Queue management will be independent of the audio engine."; color: #93b4d7; font-size: 14px; }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Tasks" : VerticalLayout {
+                                    spacing: 14px;
+                                    Text { text: "Engineering Tasks"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "Roadmap work items — a static prototype, not a project tracker"; color: #9ab4d2; font-size: 15px; }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        for stat in ["OPEN  8", "IN PROGRESS  0", "BLOCKED  0", "COMPLETED  0"] : Rectangle {
+                                            background: #142641;
+                                            border-radius: 10px;
+                                            height: 91px;
+                                            horizontal-stretch: 1;
+                                            Text { text: stat; x: 18px; height: parent.height; color: #d8eafb; vertical-alignment: center; font-size: 17px; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        background: #101f35;
+                                        vertical-stretch: 1;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 18px;
+                                            spacing: 18px;
+                                            Text { text: "BACKLOG                     MODULE                         STATUS"; color: #7ca9d7; font-size: 15px; }
+                                            Rectangle { height: 1px; background: #294361; }
+                                            for task in [
+                                                "P0  Verify Rust / Slint Windows build",
+                                                "P1  WASAPI output and decode workers",
+                                                "P2  DSP / parametric equalizer",
+                                                "P3  Library and playlists",
+                                                "P4  Spectrum and oscilloscope",
+                                                "P5  yt-dlp downloader isolation",
+                                                "P6  External plugin protocol",
+                                                "P7  MSI / release testing"
+                                            ] : Rectangle {
+                                                height: 49px;
+                                                background: #132945;
+                                                border-radius: 7px;
+                                                Text { text: task + "    ·    PLANNED"; x: 12px; color: #d3eaff; height: parent.height; vertical-alignment: center; font-size: 16px; }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Plans" : VerticalLayout {
+                                    spacing: 14px;
+                                    Text { text: "Product Roadmap"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "P0 to P7 — development stages, dates pending measurement"; color: #99b6d8; font-size: 16px; }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        for stat in ["P0  ARCHITECTURE", "NEXT  PLAYBACK", "RISK  DEVICE I/O"] : Rectangle {
+                                            height: 90px;
+                                            background: #152744;
+                                            border-radius: 11px;
+                                            horizontal-stretch: 1;
+                                            Text { text: stat; color: #dcecff; height: parent.height; x: 17px; font-size: 17px; vertical-alignment: center; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1;
+                                        background: #102039;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 17px;
+                                            spacing: 16px;
+                                            Text { text: "ROADMAP MILESTONES     ·     all not yet shipped"; color: #4ab9ff; font-size: 16px; }
+                                            for plan in [
+                                                "P0     Toolchain, feasibility, benchmarks",
+                                                "P1     MP3 / FLAC / WAV playback",
+                                                "P2     Equalizer and DSP",
+                                                "P3     Library, playlists, metadata",
+                                                "P4     Visualizations, themes, hotkeys",
+                                                "P5     yt-dlp download manager",
+                                                "P6     Extensions and plugins",
+                                                "P7     Installer, beta and release"
+                                            ] : Rectangle {
+                                                height: 54px;
+                                                background: #162c4b;
+                                                border-radius: 8px;
+                                                HorizontalLayout {
+                                                    padding-left: 17px;
+                                                    padding-right: 17px;
+                                                    Text { text: plan; color: #e5f4ff; vertical-alignment: center; horizontal-stretch: 1; font-size: 17px; }
+                                                    Text { text: "PLANNED"; color: #59aaff; vertical-alignment: center; font-size: 12px; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Library" : VerticalLayout {
+                                    spacing: 15px;
+                                    Text { text: "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "Folder indexing, tracks, albums and playlists are scheduled for P3."; color: #91b1d5; font-size: 17px; }
+                                    Button { text: "Browse music (not connected)"; clicked => { root.notice = "Library scanner has not been implemented"; } }
+                                    Rectangle { vertical-stretch: 1; background: #102039; border-radius: 12px; }
+                                }
+                                if root.active-page == "Settings" : VerticalLayout {
+                                    spacing: 15px;
+                                    Text { text: "Settings"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "Audio devices, themes, downloads and plugins will appear here."; color: #91b1d5; font-size: 17px; }
+                                    Rectangle { vertical-stretch: 1; background: #102039; border-radius: 12px; }
+                                }
+                                Rectangle {
+                                    height: 32px;
+                                    background: #0d1d32;
+                                    border-radius: 8px;
+                                    Text {
+                                        text: root.notice;
+                                        x: 12px;
+                                        height: parent.height;
+                                        vertical-alignment: center;
+                                        color: #5dc4ff;
+                                        font-size: 12px;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
