@@ -118,7 +118,7 @@
           "title": "Complete editable 31-band GUI and 10-band compact preset view",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain. EQ slider visual coordinate inverted (+12 at top, 0 center, -12 bottom) without modifying DSP; test pending."
+          "verification": "All 31 EQ sliders, 8 factory/custom presets and persistence coded. Inverted gain UI: +12 top, 0 center, -12 bottom. Compact mode and listening test remain."
         },
         {
           "id": "ZP-204",
