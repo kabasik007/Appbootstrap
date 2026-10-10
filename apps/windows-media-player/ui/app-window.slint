@@ -21,7 +21,7 @@ component NavigationItem inherits Rectangle {
     }
 }
 
-component TitleLabel inherits Text {
+export component TitleLabel inherits Text {
     in property <string> caption;
     text: caption;
     color: #eef5ff;
@@ -55,8 +55,6 @@ export component AppWindow inherits Window {
     title: "ZillaPlayer — native Windows UI prototype";
     width: 1510px;
     height: 920px;
-    min-width: 1180px;
-    min-height: 780px;
     background: #07101e;
 
     in-out property <string> active-page: "Player";
