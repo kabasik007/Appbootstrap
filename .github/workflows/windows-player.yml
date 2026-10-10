@@ -55,13 +55,13 @@ jobs:
           Copy-Item "README_DOWNLOADS_UA.txt" (Join-Path $destination "README_DOWNLOADS_UA.txt")
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content -Path (Join-Path $destination "SHA256SUMS.txt") -Value "$hash  zillaplayer.exe"
-          Compress-Archive -Path $destination -DestinationPath (Join-Path $PWD "portable/ZillaPlayer-Downloader-Alpha-Windows-x64.zip") -Force
+          Compress-Archive -Path $destination -DestinationPath (Join-Path $PWD "portable/ZillaPlayer-v0.3.0-alpha.1-Windows-x64.zip") -Force
       - name: Upload unsigned portable alpha
         uses: actions/upload-artifact@v4
         with:
-          name: zillaplayer-downloader-windows-x64-alpha
+          name: zillaplayer-v0.3.0-alpha.1-windows-x64
           path: |
-            apps/windows-media-player/portable/ZillaPlayer-Downloader-Alpha-Windows-x64.zip
+            apps/windows-media-player/portable/ZillaPlayer-v0.3.0-alpha.1-Windows-x64.zip
             apps/windows-media-player/target/release/zillaplayer.exe
           if-no-files-found: error
           retention-days: 14
@@ -88,3 +88,52 @@ jobs:
           path: apps/windows-media-player/Cargo.lock
           if-no-files-found: warn
           retention-days: 14
+
+  publish-alpha:
+    # Publishing is opt-in via a dedicated commit message, never on PRs.
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-alpha]')
+    needs: windows-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: zillaplayer-v0.3.0-alpha.1-windows-x64
+          path: release
+      - name: Publish checked Windows alpha ZIP as GitHub Prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="zillaplayer-v0.3.0-alpha.1"
+          asset="release/portable/ZillaPlayer-v0.3.0-alpha.1-Windows-x64.zip"
+          test -s "$asset"
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $tag already exists. Refusing to replace published binaries."
+            exit 1
+          fi
+          cat > release-notes.md <<'NOTES'
+          ZillaPlayer 0.3.0 Alpha 1 — Windows 10/11 x64 (unsigned portable build)
+
+          Includes:
+          - Ukrainian-first interface, local library and named playlists.
+          - 31-band DSP EQ and corrected vertical gain direction (+12 dB top).
+          - Live FFT spectrum that grows upwards, playback and playlist controls.
+          - yt-dlp/FFmpeg downloader queue for authorized audio/video, 1440p QHD video mux, MP3 extraction.
+          - Metadata Analyze, playlist preview and selection, bundled-tool discovery.
+
+          Install:
+          1. Download the attached ZIP, extract it and run ZillaPlayer/zillaplayer.exe.
+          2. To test downloads, separately install trusted yt-dlp and FFmpeg; Deno can help for some YouTube sources. Setup instructions are inside the ZIP.
+          3. Only download media you own or are permitted to save; no DRM bypass.
+
+          This is a test alpha, not a signed/stable production release. Hardware audio and live-source downloading need real-world testing.
+          NOTES
+          gh release create "$tag" "$asset" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "ZillaPlayer v0.3.0 Alpha 1 — Windows x64" \
+            --notes-file release-notes.md \
+            --prerelease
