@@ -300,11 +300,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cmd = commands.clone();
     let eq_ref = current_eq.clone();
     let suppress = eq_programmatic.clone();
+    let values = eq_values.clone();
     let dirty = session_dirty.clone();
     let touched = touched_eq.clone();
     ui.on_set_eq_band(move |index, db| {
         if !suppress.get() && index >= 0 && (index as usize) < EQ_BAND_COUNT && db.is_finite() {
-            eq_ref.borrow_mut().bands[index as usize] = db.clamp(-12.0, 12.0);
+            let level = db.clamp(-12.0, 12.0);
+            eq_ref.borrow_mut().bands[index as usize] = level;
+            values.set_row_data(index as usize, level);
             touched.set(true);
             dirty.set(true);
             let _ = cmd.send(Command::SetEqBand(index as usize, db));
@@ -313,11 +316,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cmd = commands.clone();
     let eq_ref = current_eq.clone();
     let suppress = eq_programmatic.clone();
+    let weak = ui.as_weak();
     let dirty = session_dirty.clone();
     let touched = touched_eq.clone();
     ui.on_set_preamp(move |db| {
         if !suppress.get() && db.is_finite() {
             eq_ref.borrow_mut().preamp = db.clamp(-18.0, 6.0);
+            if let Some(window) = weak.upgrade() { window.set_eq_preamp(db.clamp(-18.0, 6.0)); }
             touched.set(true);
             dirty.set(true);
             let _ = cmd.send(Command::SetPreamp(db));
