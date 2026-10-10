@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: User feedback: progress resets on track switch; fast EQ horizontal page controls; playlist/queue scroll; sort by filename, folder, rating; persisted 0–5 star ratings; best-effort Windows multimedia hotkeys. Windows CI validation underway.",
+  "status_note": "2026-10-10: Added P8 Zilla Studio MVP in Rust/Slint: 24-key two-octave virtual MIDI piano, four procedural synth timbres, four-channel mixer with gain/pan/mute/master, click metronome 40–240 BPM, C-major drill. Physical MIDI hardware, recording and piano roll pending. Windows CI and audible tests pending.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -318,6 +318,57 @@
           "priority": "blocker",
           "status": "todo",
           "verification": "Release artifact/signature/checksum verification"
+        }
+      ]
+    },
+    {
+      "id": "P8",
+      "name": "Studio & MIDI practice",
+      "status": "in_progress",
+      "goal": "Practical piano, metronome and multichannel sound training isolated from the music player",
+      "gate": "Audible notes, responsive polyphony/mixer, 20-minute metronome test and hardware MIDI keyboard input on Windows",
+      "tasks": [
+        {
+          "id": "ZP-801",
+          "title": "Two-octave virtual MIDI keyboard and four-timbre polyphonic Rust synthesizer",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Slint keyboard and detached Rodio stream with four procedural note profiles coded. Windows compile and audible hardware tests pending."
+        },
+        {
+          "id": "ZP-802",
+          "title": "Live 4-channel gain/pan/mute mixer and master fader",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Four atomic channel states, live per-voice faders/pan/mute and master control coded. Stress/CPU and user listening tests pending."
+        },
+        {
+          "id": "ZP-803",
+          "title": "Scale practice C-major feedback and tempo metronome",
+          "priority": "medium",
+          "status": "implemented_unverified",
+          "verification": "C4 through C5 exercise with hit scoring, reset and adjustable 40–240 BPM synthesizer click coded; practice and drift verification pending."
+        },
+        {
+          "id": "ZP-804",
+          "title": "Physical USB MIDI keyboard device discovery and Note On/Off input",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Connect/disconnect keyboard; prove latency and velocity with device hotplug and without blocking music playback."
+        },
+        {
+          "id": "ZP-805",
+          "title": "Piano roll sequencer, MIDI export and recording",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Record timestamped notes, snap to grid, edit patterns and export standards-compliant .mid without audio-thread allocation."
+        },
+        {
+          "id": "ZP-806",
+          "title": "Studio audio coexistence, latency controls and session persistence",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Physical WASAPI concurrent music+synth testing, routing, controller settings and crash-safe studio state persistence."
         }
       ]
     }
