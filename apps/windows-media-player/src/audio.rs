@@ -45,7 +45,7 @@ pub struct AudioController {
 }
 pub fn start_audio_worker() -> AudioController {
     let (commands, incoming) = mpsc::channel();
-    let (updates, outgoing) = mpsc::sync_channel(16);
+    let (outgoing, updates) = mpsc::sync_channel(16);
     let spectrum = Spectrum::new();
     let worker_spectrum = Arc::clone(&spectrum);
     thread::Builder::new()
