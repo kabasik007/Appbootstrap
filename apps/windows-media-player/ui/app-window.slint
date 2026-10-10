@@ -68,6 +68,18 @@ export component AppWindow inherits Window {
     callback load-playlist(int);
     callback save-active-playlist;
     callback delete-active-playlist;
+    in-out property <string> download-url: "";
+    in-out property <int> download-profile: 0;
+    in-out property <bool> download-playlist: false;
+    in-out property <string> download-folder: "";
+    in-out property <string> download-tool-status: "Перевірка інструментів...";
+    in-out property <string> download-status: "Лише дозволені для завантаження матеріали";
+    in property <[string]> download-job-rows: [];
+    callback choose-download-folder;
+    callback enqueue-download;
+    callback cancel-download(int);
+    callback retry-download(int);
+    callback check-download-tools;
     in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
     in-out property <string> track-title: "Трек не вибрано";
     in-out property <bool> playing: false;
@@ -386,60 +398,171 @@ export component AppWindow inherits Window {
                                     }
                                 }
                                 if root.active-page == "Downloads" : VerticalLayout {
-                                    spacing: 14px;
-                                    Text { text: (root.uk ? "Завантаження" : "Downloads"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "Media URLs, formats, playlists and jobs · UI preview"; color: #9ab4d2; font-size: 16px; }
-                                    HorizontalLayout {
-                                        spacing: 10px;
-                                        url-input := LineEdit {
-                                            placeholder-text: "Paste an authorized video, audio or playlist URL...";
-                                            horizontal-stretch: 1;
-                                        }
-                                        Button {
-                                            text: "Analyze";
-                                            clicked => { root.notice = "yt-dlp integration is planned for P5 — no URL was fetched"; }
-                                        }
+                                    spacing: 12px;
+                                    Text {
+                                        text: root.uk ? "Менеджер завантажень" : "Download Manager";
+                                        color: #f4f8ff;
+                                        font-size: 30px;
+                                        font-weight: 700;
                                     }
-                                    HorizontalLayout {
-                                        spacing: 12px;
-                                        for stat in ["IN QUEUE     0", "ACTIVE     0", "FINISHED     0", "DISK USED     0 B"] : Rectangle {
-                                            height: 89px;
-                                            background: #12243e;
-                                            border-radius: 10px;
-                                            horizontal-stretch: 1;
-                                            Text { text: stat; x: 15px; color: #c1e3ff; vertical-alignment: center; height: parent.height; font-size: 16px; }
-                                        }
+                                    Text {
+                                        text: root.uk
+                                            ? "yt-dlp + FFmpeg · MP3 · відео 1440p · плейлисти · окремий фоновий процес"
+                                            : "yt-dlp + FFmpeg · MP3 · 1440p video · playlists · isolated worker";
+                                        color: #9ab4d2;
+                                        font-size: 14px;
                                     }
                                     Rectangle {
-                                        height: 215px;
+                                        height: 216px;
                                         background: #12243e;
                                         border-radius: 12px;
                                         VerticalLayout {
-                                            padding: 18px;
-                                            spacing: 14px;
-                                            Text { text: "SOURCE PREVIEW"; color: #48b5ff; font-size: 15px; }
-                                            Text { text: "No source analyzed"; color: #ffffff; font-size: 25px; }
-                                            Text { text: "Analyze a permitted media URL once the yt-dlp adapter is implemented."; color: #91adcd; font-size: 14px; }
+                                            padding: 13px;
+                                            spacing: 9px;
                                             HorizontalLayout {
                                                 spacing: 9px;
-                                                Button { text: "Audio / MP3"; clicked => { root.notice = "Format profiles not connected"; } }
-                                                Button { text: "Best Video"; clicked => { root.notice = "Format profiles not connected"; } }
-                                                Button { text: "Playlist"; clicked => { root.notice = "Playlist analysis not connected"; } }
+                                                LineEdit {
+                                                    horizontal-stretch: 1;
+                                                    placeholder-text: root.uk
+                                                        ? "Вставте посилання на дозволене відео або плейлист..."
+                                                        : "Paste an authorized media or playlist URL...";
+                                                    text <=> root.download-url;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "+ До черги" : "+ Queue";
+                                                    clicked => { root.enqueue-download(); }
+                                                }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                for profile[i] in ["MP3 320k","Аудіо ориг.","1440p / MKV","1080p / MKV","Best / MKV"] : Button {
+                                                    text: profile;
+                                                    clicked => { root.download-profile = i; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #12243e; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 11px;
+                                                Text {
+                                                    text: (root.uk ? "Обрано: " : "Selected: ") +
+                                                        (root.download-profile == 0 ? "MP3 320k" :
+                                                         root.download-profile == 1 ? "Original Audio" :
+                                                         root.download-profile == 2 ? "1440p MKV" :
+                                                         root.download-profile == 3 ? "1080p MKV" : "Best MKV");
+                                                    color: #43caff; font-size: 14px;
+                                                    vertical-alignment: center;
+                                                }
+                                                Button {
+                                                    text: root.download-playlist
+                                                        ? (root.uk ? "☑ Увесь плейлист (до 200)" : "☑ Playlist (max 200)")
+                                                        : (root.uk ? "☐ Одне відео" : "☐ Single video");
+                                                    clicked => { root.download-playlist = !root.download-playlist; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #12243e; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                Text {
+                                                    text: root.uk ? "Папка:" : "Save to:";
+                                                    color: #bdd8f2; vertical-alignment: center;
+                                                }
+                                                Text {
+                                                    text: root.download-folder;
+                                                    color: #7ad2ff;
+                                                    horizontal-stretch: 1;
+                                                    font-size: 13px;
+                                                    vertical-alignment: center;
+                                                    overflow: elide;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Огляд..." : "Browse...";
+                                                    clicked => { root.choose-download-folder(); }
+                                                }
+                                            }
+                                            Text {
+                                                text: root.uk
+                                                    ? "Завантажуйте лише власні або дозволені матеріали. 1440p — це QHD; наявність якості залежить від джерела."
+                                                    : "Download only media you own or have permission to save. 1440p is QHD; source quality varies.";
+                                                color: #91a9c7;
+                                                font-size: 12px;
                                             }
                                         }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 9px;
+                                        Text {
+                                            text: root.download-tool-status;
+                                            horizontal-stretch: 1;
+                                            color: #81cfff;
+                                            vertical-alignment: center;
+                                            font-size: 14px;
+                                        }
+                                        Button {
+                                            text: root.uk ? "Перевірити yt-dlp / FFmpeg" : "Check yt-dlp / FFmpeg";
+                                            clicked => { root.check-download-tools(); }
+                                        }
+                                    }
+                                    Text {
+                                        text: root.download-status;
+                                        color: #d6ecff;
+                                        font-size: 14px;
+                                        max-height: 32px;
+                                        overflow: elide;
                                     }
                                     Rectangle {
                                         background: #101f35;
                                         vertical-stretch: 1;
                                         border-radius: 12px;
                                         VerticalLayout {
-                                            padding: 16px;
-                                            spacing: 12px;
-                                            Text { text: "DOWNLOAD QUEUE"; color: #edf5ff; font-size: 18px; }
+                                            padding: 12px;
+                                            spacing: 10px;
+                                            HorizontalLayout {
+                                                Text {
+                                                    text: root.uk ? "ЧЕРГА ЗАВАНТАЖЕНЬ" : "DOWNLOAD QUEUE";
+                                                    color: #eaf4ff; font-size: 18px; font-weight: 700;
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #101f35; }
+                                                Text {
+                                                    text: "" + root.download-job-rows.length + (root.uk ? " завдань" : " jobs");
+                                                    color: #70c9ff; font-size: 13px;
+                                                }
+                                            }
                                             Rectangle { height: 1px; background: #294361; }
-                                            Text { text: "Item                                 Status                       Progress              Speed                 Actions"; color: #87a8c7; font-size: 13px; }
-                                            Rectangle { height: 1px; background: #294361; }
-                                            Text { text: "No jobs yet. Queue management will be independent of the audio engine."; color: #93b4d7; font-size: 14px; }
+                                            ScrollView {
+                                                vertical-stretch: 1;
+                                                horizontal-stretch: 1;
+                                                content-height: root.download-job-rows.length * 58px;
+                                                vertical-scrollbar-policy: as-needed;
+                                                horizontal-scrollbar-policy: always-off;
+                                                VerticalLayout {
+                                                    spacing: 5px;
+                                                    for job[i] in root.download-job-rows : Rectangle {
+                                                        height: 52px;
+                                                        background: #172b47;
+                                                        border-radius: 7px;
+                                                        HorizontalLayout {
+                                                            padding: 6px;
+                                                            spacing: 8px;
+                                                            Text {
+                                                                text: job;
+                                                                color: #d7eaff;
+                                                                font-size: 12px;
+                                                                horizontal-stretch: 1;
+                                                                vertical-alignment: center;
+                                                                overflow: elide;
+                                                            }
+                                                            Button {
+                                                                text: root.uk ? "Скасувати" : "Cancel";
+                                                                clicked => { root.cancel-download(i); }
+                                                            }
+                                                            Button {
+                                                                text: root.uk ? "Повтор" : "Retry";
+                                                                clicked => { root.retry-download(i); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
