@@ -13,8 +13,8 @@ enum Action { Normal, Eco, Emergency, SecondarySleep, SecondaryWake, Quit }
 fn estimate(ui: &MainWindow) {
     let soc = ui.get_soc();
     let watts = ui.get_watts();
-    ui.set_soc_text(format!("{soc}%").into());
-    ui.set_watts_text(format!("{watts} W").into());
+    ui.set_soc_text(format!("{soc:.0}%").into());
+    ui.set_watts_text(format!("{watts:.0} W").into());
     ui.set_runtime_text(model::BatteryModel::default().label(soc as f64, watts as f64).into());
 }
 
