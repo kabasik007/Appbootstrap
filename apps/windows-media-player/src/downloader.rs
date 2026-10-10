@@ -52,7 +52,7 @@ impl Format {
             _ => return None,
         })
     }
-    fn needs_ffmpeg(self) -> bool { !matches!(self, Self::OriginalAudio) }
+    fn needs_ffmpeg(self) -> bool { true }
     fn is_audio(self) -> bool { matches!(self, Self::Mp3 | Self::OriginalAudio) }
     pub fn label(self) -> &'static str {
         match self {
@@ -312,7 +312,8 @@ fn arguments(job: &Job) -> Vec<String> {
     match job.format {
         Format::Mp3 => args.extend(["-f","ba/b","-x","--audio-format","mp3",
                                     "--audio-quality","320K"].map(str::to_string)),
-        Format::OriginalAudio => args.extend(["-f","ba/b"].map(str::to_string)),
+        Format::OriginalAudio => args.extend(["-f","ba/b","-x",
+                                               "--audio-format","best"].map(str::to_string)),
         Format::Video1440 => args.extend(["-f","bv*[height<=1440]+ba/b[height<=1440]",
                                           "--merge-output-format","mkv"].map(str::to_string)),
         Format::Video1080 => args.extend(["-f","bv*[height<=1080]+ba/b[height<=1080]",
@@ -594,6 +595,12 @@ mod tests {
         assert!(args.windows(2).any(|w|w==["--print","after_move:ZILLA_FILE:%(filepath)s"]));
         assert!(args.contains(&"--no-playlist".to_string()));
         assert_eq!(args[args.len()-2],"--");
+    }
+    #[test]
+    fn original_audio_extracts_audio_even_from_muxed_media() {
+        let args=arguments(&fake_job(Format::OriginalAudio,false));
+        assert!(args.contains(&"-x".to_string()));
+        assert!(args.windows(2).any(|w|w==["--audio-format","best"]));
     }
     #[test]
     fn mp3_playlist_has_transcode_and_item_cap() {
