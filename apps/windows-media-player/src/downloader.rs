@@ -119,7 +119,7 @@ enum Action {
     Probe,
     Shutdown,
 }
-enum Output { Progress(f32), File(PathBuf), Error(String) }
+enum Output { Progress(f32), File(PathBuf), Title(String), Error(String) }
 struct Active {
     id: u64,
     child: Child,
@@ -131,7 +131,7 @@ struct Active {
 pub struct Downloader {
     command: Sender<Action>,
     state: Arc<Mutex<Snapshot>>,
-    worker: Option<JoinHandle<()>>,
+    worker: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Downloader {
@@ -144,7 +144,7 @@ impl Downloader {
         let worker_state = Arc::clone(&state);
         let worker = thread::Builder::new().name("zilla-download-supervisor".into())
             .spawn(move || supervise(receiver, worker_state)).ok();
-        Self { command, state, worker }
+        Self { command, state, worker: Mutex::new(worker) }
     }
     pub fn queue(&self, url: String, format: Format, playlist: bool, folder: PathBuf) {
         let _ = self.command.send(Action::Queue { url, format, playlist, folder });
@@ -160,9 +160,11 @@ impl Downloader {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         std::mem::take(&mut state.imported_files)
     }
-    pub fn shutdown(mut self) {
+    pub fn shutdown(&self) {
         let _ = self.command.send(Action::Shutdown);
-        if let Some(worker) = self.worker.take() { let _ = worker.join(); }
+        if let Some(worker) = self.worker.lock().unwrap_or_else(|e|e.into_inner()).take() {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -298,6 +300,7 @@ fn arguments(job: &Job) -> Vec<String> {
         "--output", "%(title).180B [%(id)s].%(ext)s",
         "--progress-template", "download:ZILLA_PROGRESS:%(progress._percent_str)s",
         "--print", "after_move:ZILLA_FILE:%(filepath)s",
+        "--print", "before_dl:ZILLA_TITLE:%(title)s",
     ].into_iter().map(str::to_string).collect::<Vec<_>>();
     args.push("--paths".into());
     args.push(job.folder.to_string_lossy().to_string());
@@ -332,6 +335,8 @@ fn spawn_reader<R: std::io::Read + Send + 'static>(
                 if let Some(percent) = parse_progress(raw) {
                     let _ = tx.try_send(Output::Progress(percent));
                 }
+            } else if let Some(raw) = line.strip_prefix("ZILLA_TITLE:") {
+                let _ = tx.try_send(Output::Title(raw.chars().take(100).collect()));
             } else if let Some(raw) = line.strip_prefix("ZILLA_FILE:") {
                 // File notifications are infrequent and must not be lost.
                 let _ = tx.try_send(Output::File(PathBuf::from(raw)));
@@ -473,6 +478,13 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                     if let Some(task)=current.as_ref() {
                         if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
                             job.progress=progress;dirty=true;
+                        }
+                    }
+                }
+                Ok(Output::Title(title)) => {
+                    if let Some(task)=current.as_ref() {
+                        if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
+                            job.detail=title;dirty=true;
                         }
                     }
                 }
