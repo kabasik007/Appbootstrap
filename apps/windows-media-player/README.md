@@ -16,7 +16,7 @@
 - GUI: **Slint** (кандидат; пройти технічний + ліцензійний spike).
 - Audio output (P1 alpha): **Rodio 0.21.1 → CPAL** → WASAPI shared mode на Windows. Далі дослідимо прямий CPAL із власним DSP callback.
 - Decode: **Symphonia через Rodio**, MP3/FLAC/WAV/OGG/M4A (фактичні файли ще потрібно протестувати).
-- DSP: 31-смуговий Biquad EQ (15 смуг у компактному інтерфейсі), бас, тембр, loudness, bypass. Декодер і розрахунок коефіцієнтів уже винесені з аудіошляху **в коді**, але Windows-обробка, інші виклики Rodio/CPAL та фактична real-time безпека ще не перевірені.
+- DSP: 31-смуговий Biquad EQ (усі 31 частота керуються з інтерфейсу; горизонтальна прокрутка), бас, тембр, loudness, bypass. Декодер і розрахунок коефіцієнтів уже винесені з аудіошляху **в коді**, але Windows-обробка, інші виклики Rodio/CPAL та фактична real-time безпека ще не перевірені.
 - Library: сканування у Windows-підпроцесі, JSONL IPC та список до 50 тис. треків. **Додано асинхронне збереження й відновлення черги** в `%APPDATA%\\ZillaPlayer\\session-v1.json`; повна SQLite-бібліотека та метадані ще попереду.
 - Downloads: **yt-dlp зовнішнім процесом**; FFmpeg/ffprobe + актуальні YouTube runtime/EJS вимоги як залежності, що перевіряються.
 - Плагіни: власні вбудовані інтерфейси на старті, розширення зовнішніми адаптерами після визначення ABI / безпеки.
@@ -38,6 +38,13 @@
 - [Продуктивність і тести](docs/PERFORMANCE_TEST_PLAN.md).
 - [Безпека / права / дистрибуція](docs/SECURITY_LEGAL.md).
 - [Технологічні рішення](docs/TECH_STACK_RESEARCH.md).
+
+## Останній інженерний крок
+
+- **Повний еквалайзер:** 31 частотний повзунок з прямою відповідністю `BAND_HZ` Rust DSP, горизонтальний `ScrollView` для різних розмірів вікна.
+- **Decoder timeout cancellation:** `prepare()` тепер надсилає прапорець скасування дочірньому decoder-worker при помилці/тайм-ауті; тести перевіряють скасування покинутої ініціалізації.
+- **UI contract validation:** `python tools/check_ui_contract.py` перевіряє частоти, кількість смуг і callback-маршрут ще до Windows Cargo CI.
+- **Build evidence:** Windows Actions завантажує resolved `Cargo.lock`, показує версії `rustc/cargo`; без реального запуску зелений статус **не заявляємо**.
 
 ## Нове: справжня FFT-візуалізація
 
@@ -82,7 +89,7 @@ cd apps/windows-media-player
 cargo run
 ```
 
-В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** Є 31-смуговий DSP-процесор і керування басом/тембром/гучністю, сканування папок через кнопку Folder. Візуалізація та downloader поки демо. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
+В UI кнопка **Open File** відкриває системний діалог, далі Rust надсилає декодований звук через CPAL/WASAPI; є Play/Pause/Stop/Seek/Volume. **Це alpha-код, а не підтверджений working build.** Є 31-смуговий DSP-процесор і керування басом/тембром/гучністю, сканування папок через кнопку Folder. 32-смуговий FFT працює у вихідному коді через незалежний аналізатор, але ще не перевірений на Windows; downloader поки прототип інтерфейсу. Докладніше: [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md), [DEVELOPMENT_NOTES.md](docs/DEVELOPMENT_NOTES.md).
 
 ## Roadmap в самому застосунку
 
@@ -95,7 +102,7 @@ python tools/roadmap_sync.py --check
 
 ## Перший наступний крок
 
-Підтвердити Windows-збірку й ручне прослуховування MP3/FLAC, перевірити плавні паузи, seek та еквалайзер. Далі рознести декодування й PCM-буфер окремо від audio callback і перенести коефіцієнти EQ на control thread.
+Підтвердити Windows-збірку й ручне прослуховування MP3/FLAC, перевірити плавні паузи, seek та всі 31 повзунок EQ. Декодер, PCM-буфер та коефіцієнти EQ вже відокремлені у вихідному коді; далі — перевірка затримок, скасування швидких seek і відновлення аудіопристрою.
 
 ## Статус перевірки
 
