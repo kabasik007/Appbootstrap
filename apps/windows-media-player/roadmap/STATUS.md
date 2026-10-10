@@ -3,7 +3,7 @@
 > Generated from [roadmap.json](roadmap.json) by `tools/roadmap_sync.py`.
 > Source code present does **not** mean a feature is verified or shipped.
 
-**Snapshot:** 2026-10-10  |  **Phases:** 8  |  **Tasks:** 34
+**Snapshot:** 2026-10-10  |  **Phases:** 9  |  **Tasks:** 40
 
 ## Phase milestones
 
@@ -17,6 +17,7 @@
 | P5 | Media downloader | in_progress | Authorized audio/video/playlist downloads, cancellation and error reporting verified |
 | P6 | Extension API | planned | Version mismatch/crashing plugin safely disabled without playback dropouts |
 | P7 | Release & distribution | in_progress | Signed installer/portable build and release smoke tests on supported Windows versions |
+| P8 | Studio & MIDI practice | in_progress | Audible notes, responsive polyphony/mixer, 20-minute metronome test and hardware MIDI keyboard input on Windows |
 
 ## Task backlog
 
@@ -110,8 +111,21 @@
 | ZP-703 | blocker | 8-hour audio soak with scanning/EQ/downloads and user acceptance | todo | CPU/RAM/underruns and crash report |
 | ZP-704 | blocker | Signed public alpha/beta and licenses/third-party notices | todo | Release artifact/signature/checksum verification |
 
+### P8 — Studio & MIDI practice
+
+**Goal:** Practical piano, metronome and multichannel sound training isolated from the music player
+
+| ID | Priority | Task | Status | Acceptance / verification |
+| --- | --- | --- | --- | --- |
+| ZP-801 | high | Two-octave virtual MIDI keyboard and four-timbre polyphonic Rust synthesizer | implemented_unverified | Slint keyboard and detached Rodio stream with four procedural note profiles coded. Windows compile and audible hardware tests pending. |
+| ZP-802 | high | Live 4-channel gain/pan/mute mixer and master fader | implemented_unverified | Four atomic channel states, live per-voice faders/pan/mute and master control coded. Stress/CPU and user listening tests pending. |
+| ZP-803 | medium | Scale practice C-major feedback and tempo metronome | implemented_unverified | C4 through C5 exercise with hit scoring, reset and adjustable 40–240 BPM synthesizer click coded; practice and drift verification pending. |
+| ZP-804 | high | Physical USB MIDI keyboard device discovery and Note On/Off input | todo | Connect/disconnect keyboard; prove latency and velocity with device hotplug and without blocking music playback. |
+| ZP-805 | medium | Piano roll sequencer, MIDI export and recording | todo | Record timestamped notes, snap to grid, edit patterns and export standards-compliant .mid without audio-thread allocation. |
+| ZP-806 | medium | Studio audio coexistence, latency controls and session persistence | todo | Physical WASAPI concurrent music+synth testing, routing, controller settings and crash-safe studio state persistence. |
+
 ## Quality rule
 
 A task changes to `verified` only after its acceptance check actually ran 
 with evidence (Windows build logs, reproducible test output, or measurements).
-Do not fill dates or percentages by guessing; dependencies follow the P0–P7 gates.
+Do not fill dates or percentages by guessing; dependencies follow the P0–P8 gates.
