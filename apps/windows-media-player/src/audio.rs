@@ -80,6 +80,12 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>, s
             Ok(Command::Shutdown) | Err(RecvTimeoutError::Disconnected) => break,
             Err(RecvTimeoutError::Timeout) => {}
             Ok(Command::Open(path)) => {
+                // Announce a new timeline immediately; never show the old
+                // track's percent/length while the new decoder is preparing.
+                let previous = state.clone();
+                state.position = Duration::ZERO;
+                state.duration = None;
+                state.title = media_title(&path);
                 state.detail = "Opening media on background decoder…".into();
                 send_snapshot(&events, &state);
                 match install_track(
@@ -98,6 +104,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>, s
                     }
                     Err(error) => {
                         if let Some(old) = sink.as_ref() {
+                            state = previous;
                             state.transport = if old.is_paused() {
                                 Transport::Paused
                             } else { Transport::Playing };
