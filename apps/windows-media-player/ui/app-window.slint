@@ -81,6 +81,10 @@ export component AppWindow inherits Window {
     callback retry-download(int);
     callback check-download-tools;
     callback clear-download-history;
+    in-out property <string> download-preview-status: "";
+    in property <[string]> download-preview-rows: [];
+    callback analyze-download;
+    callback toggle-download-preview(int);
     in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
     in-out property <string> track-title: "Трек не вибрано";
     in-out property <bool> playing: false;
@@ -440,6 +444,10 @@ export component AppWindow inherits Window {
                                                     text <=> root.download-url;
                                                 }
                                                 Button {
+                                                    text: root.uk ? "Аналіз" : "Analyze";
+                                                    clicked => { root.analyze-download(); }
+                                                }
+                                                Button {
                                                     text: root.uk ? "+ До черги" : "+ Queue";
                                                     clicked => { root.enqueue-download(); }
                                                 }
@@ -519,6 +527,33 @@ export component AppWindow inherits Window {
                                         font-size: 14px;
                                         max-height: 32px;
                                         overflow: elide;
+                                    }
+                                    if root.download-preview-rows.length > 0 : Rectangle {
+                                        height: 155px;
+                                        background: #12243e;
+                                        border-radius: 10px;
+                                        VerticalLayout {
+                                            padding: 9px;
+                                            spacing: 5px;
+                                            Text {
+                                                text: root.download-preview-status;
+                                                color: #64cdff;
+                                                font-size: 13px;
+                                            }
+                                            ScrollView {
+                                                vertical-stretch: 1;
+                                                content-height: root.download-preview-rows.length * 35px;
+                                                vertical-scrollbar-policy: as-needed;
+                                                horizontal-scrollbar-policy: always-off;
+                                                VerticalLayout {
+                                                    spacing: 2px;
+                                                    for item[i] in root.download-preview-rows : Button {
+                                                        text: item;
+                                                        clicked => { root.toggle-download-preview(i); }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                     Rectangle {
                                         background: #101f35;
