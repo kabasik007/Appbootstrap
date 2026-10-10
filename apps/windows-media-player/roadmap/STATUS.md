@@ -51,7 +51,7 @@
 | --- | --- | --- | --- | --- |
 | ZP-201 | high | 31-band EQ + bass/treble + preamp + bypass + loudness prototype | implemented_unverified | Rust DSP tests plus listening and frequency sweeps |
 | ZP-202 | blocker | Move EQ coefficient design from callback into control worker | implemented_unverified | Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling |
-| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain. EQ slider visual coordinate inverted (+12 at top, 0 center, -12 bottom) without modifying DSP; test pending. |
+| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | All 31 EQ sliders, 8 factory/custom presets and persistence coded. Inverted gain UI: +12 top, 0 center, -12 bottom. Compact mode and listening test remain. |
 | ZP-204 | high | Gain staging, ReplayGain, limiter and clipping meter | todo | Peak/response and clipping tests |
 | ZP-205 | medium | User-defined DSP presets with import/export | in_progress | Custom EQ presets and last curve persist to backward-compatible session-v1.json; preset-specific standalone import/export and migration to schema-v2 pending. |
 
