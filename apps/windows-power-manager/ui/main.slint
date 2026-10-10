@@ -68,14 +68,14 @@ export component MainWindow inherits Window {
                     Text { text: "Заряд LiFePO4"; color: #c4d5e7; font-size: 13px; }
                     Slider {
                         minimum: 0; maximum: 100; value: root.soc;
-                        changed => { root.soc = self.value as int; root.settings-changed(); }
+                        released(value) => { root.soc = value as int; root.settings-changed(); }
                     }
                 }
                 HorizontalLayout {
                     Text { text: "Навантаження ПК + монітори"; color: #c4d5e7; font-size: 13px; }
                     Slider {
                         minimum: 100; maximum: 1000; value: root.watts;
-                        changed => { root.watts = self.value as int; root.settings-changed(); }
+                        released(value) => { root.watts = value as int; root.settings-changed(); }
                     }
                 }
                 Text {
