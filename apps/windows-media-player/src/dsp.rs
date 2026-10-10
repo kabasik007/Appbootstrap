@@ -50,6 +50,17 @@ impl EqControls {
         self.sample_rate.store(rate.max(8_000), Ordering::SeqCst);
         self.prepare();
     }
+    /// Apply the entire curve in one control-thread coefficient calculation.
+    pub fn set_curve(&self, bands: [f32; 31], preamp: f32) {
+        for (slot, db) in self.bands.iter().zip(bands.iter()) {
+            let value = if db.is_finite() { db.clamp(-12., 12.) } else { 0. };
+            slot.store(value.to_bits(), Ordering::SeqCst);
+        }
+        let gain = if preamp.is_finite() { preamp.clamp(-18., 6.) } else { -6. };
+        self.preamp_db.store(gain.to_bits(), Ordering::SeqCst);
+        self.prepare();
+    }
+
     pub fn set_band(&self, band: usize, db: f32) {
         if band < 31 && db.is_finite() {
             self.bands[band].store(db.clamp(-12., 12.).to_bits(), Ordering::SeqCst);
