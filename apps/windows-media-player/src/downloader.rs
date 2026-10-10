@@ -98,6 +98,7 @@ pub struct Job {
     pub url: String,
     pub format: Format,
     pub playlist: bool,
+    pub selected_items: Vec<usize>,
     pub folder: PathBuf,
     pub phase: Phase,
     pub progress: f32,
@@ -113,7 +114,7 @@ pub struct Snapshot {
 }
 
 enum Action {
-    Queue { url: String, format: Format, playlist: bool, folder: PathBuf },
+    Queue { url: String, format: Format, playlist: bool, selected_items: Vec<usize>, folder: PathBuf },
     Cancel(usize),
     Retry(usize),
     ClearFinished,
@@ -152,8 +153,8 @@ impl Downloader {
             .spawn(move || supervise(receiver, worker_state)).ok();
         Self { command, state, worker: Mutex::new(worker) }
     }
-    pub fn queue(&self, url: String, format: Format, playlist: bool, folder: PathBuf) {
-        let _ = self.command.send(Action::Queue { url, format, playlist, folder });
+    pub fn queue(&self, url: String, format: Format, playlist: bool, selected_items: Vec<usize>, folder: PathBuf) {
+        let _ = self.command.send(Action::Queue { url, format, playlist, selected_items, folder });
     }
     pub fn cancel(&self, index: usize) { let _ = self.command.send(Action::Cancel(index)); }
     pub fn retry(&self, index: usize) { let _ = self.command.send(Action::Retry(index)); }
@@ -175,7 +176,7 @@ impl Downloader {
     }
 }
 
-fn validate_url(raw: &str) -> Result<String, String> {
+pub(crate) fn validate_url(raw: &str) -> Result<String, String> {
     if raw.len() > MAX_URL_LEN || raw.is_empty() ||
         raw.chars().any(|c| c.is_control() || c.is_whitespace()) {
         return Err("Неправильна або занадто довга URL-адреса".into());
@@ -218,7 +219,7 @@ fn save_jobs(path: &Path, jobs: &[Job]) -> Result<(), String> {
         "version": 1,
         "jobs": jobs.iter().map(|j| serde_json::json!({
             "id":j.id,"url":j.url,"format":j.format.as_str(),
-            "playlist":j.playlist,"folder":j.folder.to_string_lossy(),
+            "playlist":j.playlist,"selected_items":j.selected_items,"folder":j.folder.to_string_lossy(),
             "phase":j.phase.key(),"progress":j.progress,
             "detail":j.detail,
         })).collect::<Vec<_>>()
@@ -262,6 +263,10 @@ fn load_jobs(path: &Path) -> Vec<Job> {
             Some(Job {
                 id,url,format,folder,
                 playlist:x.get("playlist").and_then(|v|v.as_bool()).unwrap_or(false),
+                selected_items:x.get("selected_items").and_then(|v|v.as_array())
+                    .map(|arr| arr.iter().take(200).filter_map(|v|v.as_u64())
+                        .filter(|p|*p>0&&*p<=200).map(|p|p as usize).collect())
+                    .unwrap_or_default(),
                 phase:if matches!(phase,Phase::Queued|Phase::Running) { Phase::Interrupted } else { phase },
                 progress:x.get("progress").and_then(|v|v.as_f64()).unwrap_or(0.0) as f32,
                 detail:x.get("detail").and_then(|v|v.as_str()).unwrap_or("").chars().take(MAX_LOG).collect(),
@@ -304,7 +309,7 @@ fn candidate_locations(name: &str, executable_dir: Option<&Path>) -> Vec<PathBuf
     }
     choices
 }
-fn executable(name: &str) -> PathBuf {
+pub(crate) fn executable(name: &str) -> PathBuf {
     let exe_dir = std::env::current_exe().ok()
         .and_then(|p| p.parent().map(Path::to_path_buf));
     candidate_locations(name, exe_dir.as_deref()).into_iter()
@@ -356,6 +361,12 @@ fn arguments(job: &Job) -> Vec<String> {
     }
     if job.playlist {
         args.extend(["--yes-playlist", "--playlist-end", "200"].map(str::to_string));
+        if !job.selected_items.is_empty() {
+            let choices = job.selected_items.iter().filter(|n| **n > 0 && **n <= 200)
+                .map(|n|n.to_string()).collect::<Vec<_>>().join(",");
+            args.push("--playlist-items".into());
+            args.push(choices);
+        }
     } else {
         args.push("--no-playlist".into());
     }
@@ -478,7 +489,7 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                 break;
             }
             Ok(Action::Probe) => { tool_state=probes(); }
-            Ok(Action::Queue{url,format,playlist,folder}) => {
+            Ok(Action::Queue{url,format,playlist,selected_items,folder}) => {
                 match validate_url(&url) {
                     Err(reason) => info=reason,
                     Ok(url) if jobs.len() >= MAX_JOBS => info="Ліміт 64 завдань (спочатку очистіть історію)".into(),
@@ -488,7 +499,7 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                             info="Оберіть папку завантаження".into();
                         } else {
                             jobs.push(Job {
-                                id:next_id,url,format,playlist,folder,
+                                id:next_id,url,format,playlist,selected_items,folder,
                                 phase:Phase::Queued,progress:0.0,detail:"Очікує".into(),
                             });
                             next_id=next_id.saturating_add(1);
@@ -633,7 +644,7 @@ mod tests {
     use super::*;
     fn fake_job(format:Format,playlist:bool)->Job {
         Job{id:1,url:"https://example.org/authorized-media".into(),
-            format,playlist,folder:PathBuf::from("C:/Downloads"),
+            format,playlist,selected_items:Vec::new(),folder:PathBuf::from("C:/Downloads"),
             phase:Phase::Queued,progress:0.,detail:String::new()}
     }
     #[test]
@@ -682,6 +693,16 @@ mod tests {
         assert!(args.windows(2).any(|w|w==["--audio-quality","320K"]));
         assert!(args.windows(2).any(|w|w==["--playlist-end","200"]));
     }
+    #[test]
+    fn selected_playlist_entries_are_passed_as_separate_safe_argument() {
+        let mut job=fake_job(Format::Mp3,true);
+        job.selected_items=vec![1,3,17];
+        let args=arguments(&job);
+        assert!(args.windows(2).any(|w|w==["--playlist-items","1,3,17"]));
+        assert!(args.windows(2).any(|w|w==["--playlist-end","200"]));
+        assert_eq!(args[args.len()-2],"--");
+    }
+
     #[test]
     fn progress_parser_handles_realistic_percentages() {
         assert_eq!(parse_progress(" 75.4% "),Some(75.4));
