@@ -26,7 +26,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | todo | Rodio 0.21 Decoder<BufReader<File>> type corrected against upstream API; need passing cargo check/test/release and committed Cargo.lock |
+| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | todo | GitHub Windows CI configured for cargo check/test/release, scanner smoke and EQ contract. Toolchain unavailable locally; must obtain actual passing run and commit Cargo.lock. |
 | ZP-002 | high | Profile startup, memory, CPU and callback timing on Windows 10/11 | todo | Repeatable measurements on declared x64 hardware |
 | ZP-003 | high | Create module boundaries, P0 technical ADRs and roadmap source | implemented_unverified | Review and validate repo plan JSON + documentation |
 | ZP-004 | high | Check Slint, FFmpeg and yt-dlp distribution licenses | todo | Signed-off license matrix |
@@ -39,7 +39,7 @@
 | --- | --- | --- | --- | --- |
 | ZP-101 | blocker | Open audio, Play/Pause/Stop, seek, master volume | implemented_unverified | Windows manual smoke + transport tests |
 | ZP-102 | blocker | Replace decoder-on-callback with background producer and bounded PCM ring | implemented_unverified | Background Rodio decoder, bounded atomic PCM SPSC ring and nonblocking output source added. Generated WAV unit fixture + Windows cargo test, seek stress and underrun profiling required. |
-| ZP-103 | high | Coalesced transport commands and cancellation generations | todo | Stress with rapid seeks and track switching |
+| ZP-103 | high | Coalesced transport commands and cancellation generations | in_progress | Adjacent Seek command coalescing exists; timeout/failed decoder setup now has cancellation guard. Need transport epochs, superseded seek cancellation and Windows rapid-switch stress. |
 | ZP-104 | high | Click-free pause, stop, seek and track switch with short audio fades | implemented_unverified | Listen and analyze waveforms for clicks |
 | ZP-105 | high | Detect and recover missing/changed WASAPI output devices | todo | USB/speaker device change tests |
 
@@ -51,7 +51,7 @@
 | --- | --- | --- | --- | --- |
 | ZP-201 | high | 31-band EQ + bass/treble + preamp + bypass + loudness prototype | implemented_unverified | Rust DSP tests plus listening and frequency sweeps |
 | ZP-202 | blocker | Move EQ coefficient design from callback into control worker | implemented_unverified | Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling |
-| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | todo | All bands adjustable, presets restored |
+| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | All 31 graphic EQ sliders now directly mapped to DSP, frequencies checked by dependency-free CI validator; compact 10-band preset view and saved presets still pending. |
 | ZP-204 | high | Gain staging, ReplayGain, limiter and clipping meter | todo | Peak/response and clipping tests |
 | ZP-205 | medium | User-defined DSP presets with import/export | todo | Schema and migration tests |
 
