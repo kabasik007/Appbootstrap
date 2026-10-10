@@ -829,9 +829,15 @@ export component AppWindow inherits Window {
                                         VerticalLayout {
                                             padding: 14px; spacing: 9px;
                                             HorizontalLayout {
-                                                Text { text: root.uk ? "МІКШЕР" : "MIXER"; color: #e8f5ff; font-size: 17px; font-weight: 700; }
-                                                Rectangle { horizontal-stretch: 1; background: transparent; }
-                                                Text { text: root.uk ? "Живе керування гучністю / панорамою" : "Live gain / pan control"; color: #8eafd4; font-size: 12px; }
+                                                spacing: 12px;
+                                                Text { text: root.uk ? "МІКШЕР" : "MIXER"; color: #e8f5ff; font-size: 17px; font-weight: 700; vertical-alignment: center; }
+                                                Text { text: root.uk ? "Майстер" : "Master"; color: #8eafd4; font-size: 13px; vertical-alignment: center; }
+                                                Slider {
+                                                    minimum: 0; maximum: 100; value: 65;
+                                                    horizontal-stretch: 1;
+                                                    changed(v) => { root.studio-set-master(v); }
+                                                }
+                                                Text { text: root.uk ? "Живе керування / панорама" : "Live gain / pan"; color: #8eafd4; font-size: 12px; vertical-alignment: center; }
                                             }
                                             HorizontalLayout {
                                                 spacing: 9px;
