@@ -30,6 +30,7 @@ pub enum Command {
     SeekPercent(f32),
     SetVolume(f32),
     SetEqBand(usize, f32),
+    SetEqCurve([f32; 31], f32),
     SetPreamp(f32),
     SetBass(f32),
     SetTreble(f32),
@@ -195,6 +196,7 @@ fn worker_loop(commands: Receiver<Command>, events: SyncSender<PlaybackState>, s
                 }
             }
             Ok(Command::SetEqBand(i, db)) => eq.set_band(i, db),
+            Ok(Command::SetEqCurve(bands, preamp)) => eq.set_curve(bands, preamp),
             Ok(Command::SetPreamp(db)) => eq.set_preamp(db),
             Ok(Command::SetBass(db)) => eq.set_bass(db),
             Ok(Command::SetTreble(db)) => eq.set_treble(db),
