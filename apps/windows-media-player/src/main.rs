@@ -5,6 +5,7 @@ mod audio;
 mod decode_worker;
 mod dsp;
 mod downloader;
+mod download_analysis;
 mod library;
 mod playback;
 mod pcm_ring;
@@ -18,6 +19,7 @@ mod visualizer;
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
 use downloader::{Downloader, Format};
+use download_analysis::{Preview, spawn_preview, row_title};
 use playback::{format_duration, Transport};
 use queue::PlayQueue;
 use presets::EqPreset;
@@ -195,6 +197,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     ui.set_download_folder(downloader::suggested_folder().to_string_lossy().to_string().into());
     let download_rows: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
     ui.set_download_job_rows(download_rows.clone().into());
+    let preview_rows: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
+    ui.set_download_preview_rows(preview_rows.clone().into());
+    let preview_state: Rc<RefCell<Option<Preview>>> = Rc::new(RefCell::new(None));
+    let pending_preview = Rc::new(RefCell::new(None::<mpsc::Receiver<Result<Preview,String>>>));
     let (playlist_tx, playlist_rx) = mpsc::channel::<PlaylistEvent>();
 
     let import_tx = playlist_tx.clone();
@@ -509,14 +515,66 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // Analysis is metadata-only, async and independent of audio playback.
+    let weak = ui.as_weak();
+    let pending = pending_preview.clone();
+    let state = preview_state.clone();
+    let model = preview_rows.clone();
+    ui.on_analyze_download(move || {
+        let Some(window) = weak.upgrade() else { return; };
+        let url = window.get_download_url().to_string();
+        let playlist = window.get_download_playlist();
+        state.borrow_mut().take();
+        model.set_vec(Vec::new());
+        window.set_download_preview_status("Аналіз метаданих у фоновому процесі...".into());
+        window.set_download_status("Аналіз... Це може зайняти до 35 секунд.".into());
+        pending.replace(Some(spawn_preview(url, playlist)));
+    });
+
+    let weak = ui.as_weak();
+    let state = preview_state.clone();
+    let model = preview_rows.clone();
+    ui.on_toggle_download_preview(move |index| {
+        if index < 0 { return; }
+        let mut active = state.borrow_mut();
+        let Some(preview) = active.as_mut() else { return; };
+        if let Some(item) = preview.items.get_mut(index as usize) {
+            item.selected = !item.selected;
+            model.set_row_data(index as usize, row_title(item).into());
+            if let Some(window) = weak.upgrade() {
+                let checked = preview.items.iter().filter(|x|x.selected).count();
+                window.set_download_preview_status(format!(
+                    "{} · обрано {} з {}", preview.title, checked, preview.items.len()
+                ).into());
+            }
+        }
+    });
+
     let dl = downloader.clone();
+    let preview = preview_state.clone();
     let weak = ui.as_weak();
     ui.on_enqueue_download(move || {
         let Some(window) = weak.upgrade() else { return; };
         let url = window.get_download_url().to_string();
         let folder = PathBuf::from(window.get_download_folder().as_str());
         let profile = Format::by_index(window.get_download_profile());
-        dl.queue(url, profile, window.get_download_playlist(), folder);
+        let playlist = window.get_download_playlist();
+        let selected_items = {
+            let state = preview.borrow();
+            match state.as_ref().filter(|p| p.source_url == url && p.is_playlist == playlist) {
+                Some(p) if playlist => {
+                    let chosen = p.items.iter().filter(|x|x.selected)
+                        .map(|x|x.position).collect::<Vec<_>>();
+                    if chosen.is_empty() {
+                        window.set_download_status("Спочатку оберіть хоча б один трек".into());
+                        return;
+                    }
+                    chosen
+                }
+                _ => Vec::new(),
+            }
+        };
+        dl.queue(url, profile, playlist, selected_items, folder);
         window.set_download_status("Додано запит. Перевірка URL та інструментів у фоновому потоці...".into());
     });
     let dl = downloader.clone();
@@ -560,11 +618,44 @@ fn main() -> Result<(), Box<dyn Error>> {
     let library_for_timer = library.clone();
     let dl_for_timer = downloader.clone();
     let dl_rows = download_rows.clone();
+    let pending_analysis = pending_preview.clone();
+    let analysis_state = preview_state.clone();
+    let analysis_rows = preview_rows.clone();
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(200), move || {
         let Some(window) = weak.upgrade() else { return };
+        // Poll analyzer without waiting. The result is owned by Slint UI only;
+        // download jobs receive immutable selected playlist indices.
+        let finished = pending_analysis.borrow().as_ref().and_then(|rx| {
+            match rx.try_recv() {
+                Ok(item) => Some(item),
+                Err(mpsc::TryRecvError::Disconnected) =>
+                    Some(Err("Потік аналізу завершився несподівано".into())),
+                Err(mpsc::TryRecvError::Empty) => None,
+            }
+        });
+        if let Some(result) = finished {
+            pending_analysis.borrow_mut().take();
+            match result {
+                Ok(preview) => {
+                    let total = preview.items.len();
+                    window.set_download_preview_status(format!(
+                        "{} · обрано {}/{}", preview.title, total, total
+                    ).into());
+                    analysis_rows.set_vec(preview.items.iter()
+                        .map(|item| SharedString::from(row_title(item))).collect::<Vec<_>>());
+                    analysis_state.replace(Some(preview));
+                    window.set_download_status(format!("Знайдено позицій: {total}").into());
+                }
+                Err(err) => {
+                    window.set_download_preview_status(format!("Помилка аналізу: {err}").into());
+                    window.set_download_status(format!("Помилка аналізу: {err}").into());
+                    analysis_rows.set_vec(Vec::new());
+                }
+            }
+        }
         // The supervisor runs independently; reading this snapshot never
         // invokes yt-dlp/FFmpeg or blocks the sound output.
         if window.get_active_page().as_str() == "Downloads" {
