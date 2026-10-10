@@ -128,9 +128,9 @@ mod tests {
     #[test]
     fn bundled_plan_is_well_formed() {
         let plan = bundled().unwrap();
-        assert_eq!(plan.milestones.len(), 8);
+        assert_eq!(plan.milestones.len(), 9);
         assert_eq!(plan.focus_tasks.len(), 8);
-        assert!(plan.task_summary.contains("34 TASKS"));
+        assert!(plan.task_summary.contains("40 TASKS"));
         assert!(plan.next_gate.contains("cargo"));
     }
 
