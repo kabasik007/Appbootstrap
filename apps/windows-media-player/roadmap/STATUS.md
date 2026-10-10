@@ -16,7 +16,7 @@
 | P4 | Visualizers & themes | in_progress | FFT driven by real PCM, 30/60 fps caps and rendering measurements |
 | P5 | Media downloader | planned | Authorized audio/video/playlist downloads, cancellation and error reporting verified |
 | P6 | Extension API | planned | Version mismatch/crashing plugin safely disabled without playback dropouts |
-| P7 | Release & distribution | planned | Signed installer/portable build and release smoke tests on supported Windows versions |
+| P7 | Release & distribution | in_progress | Signed installer/portable build and release smoke tests on supported Windows versions |
 
 ## Task backlog
 
@@ -26,7 +26,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | todo | GitHub Windows CI configured for cargo check/test/release, scanner smoke and EQ contract. Toolchain unavailable locally; must obtain actual passing run and commit Cargo.lock. |
+| ZP-001 | blocker | Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock | in_progress | GitHub Actions Windows run 38036361366: cargo check, 46 Rust tests, release EXE and scanner subprocess smoke passed. Cargo.lock uploaded as artifact; commit for reproducibility and audio hardware smoke remain. |
 | ZP-002 | high | Profile startup, memory, CPU and callback timing on Windows 10/11 | todo | Repeatable measurements on declared x64 hardware |
 | ZP-003 | high | Create module boundaries, P0 technical ADRs and roadmap source | implemented_unverified | Review and validate repo plan JSON + documentation |
 | ZP-004 | high | Check Slint, FFmpeg and yt-dlp distribution licenses | todo | Signed-off license matrix |
@@ -51,9 +51,9 @@
 | --- | --- | --- | --- | --- |
 | ZP-201 | high | 31-band EQ + bass/treble + preamp + bypass + loudness prototype | implemented_unverified | Rust DSP tests plus listening and frequency sweeps |
 | ZP-202 | blocker | Move EQ coefficient design from callback into control worker | implemented_unverified | Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling |
-| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | All 31 graphic EQ sliders now directly mapped to DSP, frequencies checked by dependency-free CI validator; compact 10-band preset view and saved presets still pending. |
+| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain. |
 | ZP-204 | high | Gain staging, ReplayGain, limiter and clipping meter | todo | Peak/response and clipping tests |
-| ZP-205 | medium | User-defined DSP presets with import/export | todo | Schema and migration tests |
+| ZP-205 | medium | User-defined DSP presets with import/export | in_progress | Custom EQ presets and last curve persist to backward-compatible session-v1.json; preset-specific standalone import/export and migration to schema-v2 pending. |
 
 ### P3 — Library & playlists
 
@@ -62,9 +62,9 @@
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
 | ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows |
-| ZP-302 | high | Persist folders and playlists in SQLite with migrations | in_progress | Interim versioned JSON session restore/save runs on a dedicated I/O thread with backup recovery; full SQLite library/migrations/folders still required and Windows tests pending |
-| ZP-303 | high | Virtualized searchable library, sorting and metadata tags | todo | Search under 100 ms on reference library |
-| ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | implemented_unverified | M3U/M3U8 UTF-8 import/export, relative paths and Unicode roundtrip tests added; still requires Windows UI/large playlist smoke |
+| ZP-302 | high | Persist folders and playlists in SQLite with migrations | in_progress | Named playlist creation, update, delete and restore via background JSON session worker implemented and 46 Windows Rust tests passed; SQLite indexing/migrations still pending. |
+| ZP-303 | high | Virtualized searchable library, sorting and metadata tags | in_progress | Search by filename and page through 12 tracks at a time; mapping to correct queue index implemented. Sorting, metadata tags, index and load-time benchmarking pending. |
+| ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | implemented_unverified | M3U/M3U8 import/export, named queue playlists and session persistence. Windows tests passed in CI; manual UI behavior on user's PC not yet confirmed. |
 | ZP-305 | medium | Cover art thumbnail cache, library watch and duplicate detection | todo | Filesystem changes and memory ceiling |
 
 ### P4 — Visualizers & themes
@@ -105,7 +105,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-701 | high | Windows clean install/upgrade/uninstall/portable packaging | todo | Two Windows versions, update/uninstall tests |
+| ZP-701 | high | Windows clean install/upgrade/uninstall/portable packaging | in_progress | Unsigned portable Windows x64 alpha created from run 38036361366 (46 Rust tests/scan smoke passed). Installer, clean update, MSVC/smart screen and Win10/11 validation pending. |
 | ZP-702 | medium | Crash diagnostics, privacy-safe logging and repair tools | todo | Failure injection and recovery |
 | ZP-703 | blocker | 8-hour audio soak with scanning/EQ/downloads and user acceptance | todo | CPU/RAM/underruns and crash report |
 | ZP-704 | blocker | Signed public alpha/beta and licenses/third-party notices | todo | Release artifact/signature/checksum verification |
