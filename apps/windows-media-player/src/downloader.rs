@@ -242,15 +242,15 @@ fn save_jobs(path: &Path, jobs: &[Job]) -> Result<(), String> {
     Ok(())
 }
 fn load_jobs(path: &Path) -> Vec<Job> {
-    let bytes = fs::read(path).or_else(|_| fs::read(path.with_extension("json.bak")));
-    let Ok(bytes) = bytes else { return Vec::new(); };
-    if bytes.len() > 200_000 { return Vec::new(); }
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-        return Vec::new();
-    };
-    if value.get("version").and_then(|v| v.as_u64()) != Some(1) {
-        return Vec::new();
-    }
+    let value = [path.to_path_buf(),path.with_extension("json.bak")]
+        .iter().find_map(|candidate| {
+            let bytes=fs::read(candidate).ok()?;
+            if bytes.len()>200_000 { return None; }
+            let value: serde_json::Value=serde_json::from_slice(&bytes).ok()?;
+            if value.get("version").and_then(|v|v.as_u64())!=Some(1) { return None; }
+            Some(value)
+        });
+    let Some(value)=value else { return Vec::new(); };
     value.get("jobs").and_then(|v| v.as_array())
         .into_iter().flatten().take(MAX_JOBS)
         .filter_map(|x| {
@@ -629,6 +629,36 @@ mod tests {
         assert_eq!(parse_progress("98.3%"),Some(98.3));
         assert_eq!(parse_progress("nan%"),None);
     }
+    #[test]
+    fn per_job_output_messages_keep_their_origin_id() {
+        use std::io::Cursor;
+        let lines = Cursor::new(b"ZILLA_PROGRESS: 44.0%\nZILLA_TITLE:Licensed Song\n".to_vec());
+        let (tx,rx)=mpsc::sync_channel(8);
+        let worker=spawn_reader(lines,900,tx);
+        worker.join().unwrap();
+        assert!(matches!(rx.try_recv(),Ok(Output::Progress(900,pct)) if pct==44.0));
+        assert!(matches!(rx.try_recv(),Ok(Output::Title(900,title)) if title=="Licensed Song"));
+    }
+
+    #[test]
+    fn unfinished_jobs_restore_as_interrupted_and_backup_survives() {
+        use std::time::{SystemTime,UNIX_EPOCH};
+        let stamp=SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let folder=std::env::temp_dir().join(format!("zillaplayer-dl-{}-{stamp}",std::process::id()));
+        let file=folder.join("downloads-v1.json");
+        let mut job=fake_job(Format::Mp3,true);
+        job.phase=Phase::Running;job.progress=23.5;
+        save_jobs(&file,&[job.clone()]).unwrap();
+        save_jobs(&file,&[job]).unwrap(); // Create backup.
+        fs::write(&file,b"invalid-json").unwrap();
+        let restored=load_jobs(&file);
+        assert_eq!(restored.len(),1);
+        assert_eq!(restored[0].phase,Phase::Interrupted);
+        assert_eq!(restored[0].format,Format::Mp3);
+        assert_eq!(restored[0].progress,23.5);
+        fs::remove_dir_all(folder).unwrap();
+    }
+
     #[test]
     fn profile_and_job_phases_roundtrip() {
         for f in [Format::Mp3,Format::OriginalAudio,Format::Video1440,Format::Video1080,Format::BestVideo] {
