@@ -522,6 +522,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let dl = downloader.clone();
     ui.on_check_download_tools(move || { dl.probe(); });
     let dl = downloader.clone();
+    ui.on_clear_download_history(move || { dl.clear_finished(); });
+    let dl = downloader.clone();
     ui.on_cancel_download(move |index| {
         if index >= 0 { dl.cancel(index as usize); }
     });
@@ -584,16 +586,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         let finished_files = dl_for_timer.take_imported();
         if !finished_files.is_empty() {
             let mut q = queue.borrow_mut();
-            let count = finished_files.len();
+            let mut already: std::collections::HashSet<PathBuf> =
+                q.snapshot().into_iter().collect();
+            let mut new_files = Vec::new();
             for file in finished_files {
-                if !q.snapshot().iter().any(|path|path==&file) {
-                    q.append(vec![file]);
-                }
+                if already.insert(file.clone()) { new_files.push(file); }
             }
+            let count = new_files.len();
+            q.append(new_files);
             drop(q);
-            dirty_for_updates.set(true);
-            refresh_library(&library_for_timer);
-            window.set_notice(format!("Додано медіафайли до бібліотеки: {count}").into());
+            if count > 0 {
+                dirty_for_updates.set(true);
+                refresh_library(&library_for_timer);
+                window.set_notice(format!("Додано аудіофайлів до бібліотеки: {count}").into());
+            }
         }
         // Restore only if user has not already started a scan or changed the queue.
         // Loading happens in the persistence worker; nothing reads disk here.
