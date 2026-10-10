@@ -21,9 +21,9 @@ def validate(data: dict) -> None:
         raise ValueError("Unsupported roadmap schema")
     phases = data.get("phases")
     if not isinstance(phases, list) or [p.get("id") for p in phases] != [
-        f"P{i}" for i in range(8)
+        f"P{i}" for i in range(9)
     ]:
-        raise ValueError("Expected unique, ordered P0 to P7")
+        raise ValueError("Expected unique, ordered P0 to P8")
     ids = set()
     for phase in phases:
         if phase.get("status") not in STATUSES or not phase.get("gate") or not phase.get("goal"):
@@ -80,7 +80,7 @@ def render(data: dict) -> str:
         "",
         "A task changes to `verified` only after its acceptance check actually ran ",
         "with evidence (Windows build logs, reproducible test output, or measurements).",
-        "Do not fill dates or percentages by guessing; dependencies follow the P0–P7 gates.",
+        "Do not fill dates or percentages by guessing; dependencies follow the P0–P8 gates.",
         "",
     ])
     return "\n".join(lines)
