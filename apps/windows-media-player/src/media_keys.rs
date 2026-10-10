@@ -9,9 +9,12 @@ use std::{
 };
 use windows_sys::Win32::{
     System::Threading::GetCurrentThreadId,
-    UI::WindowsAndMessaging::{
-        GetMessageW, PeekMessageW, PostThreadMessageW, RegisterHotKey,
-        UnregisterHotKey, MSG, MOD_NOREPEAT, PM_NOREMOVE, WM_HOTKEY, WM_QUIT,
+    UI::{
+        Input::KeyboardAndMouse::{RegisterHotKey, UnregisterHotKey, MOD_NOREPEAT},
+        WindowsAndMessaging::{
+            GetMessageW, PeekMessageW, PostThreadMessageW,
+            MSG, PM_NOREMOVE, WM_HOTKEY, WM_QUIT,
+        },
     },
 };
 
