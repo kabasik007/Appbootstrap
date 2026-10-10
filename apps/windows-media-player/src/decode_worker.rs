@@ -8,7 +8,7 @@ use std::{
     fs::File,
     io::BufReader,
     path::PathBuf,
-    sync::{mpsc, Arc},
+    sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc},
     thread,
     time::{Duration, Instant},
 };
@@ -29,6 +29,19 @@ struct TrackInfo {
     duration: Option<Duration>,
 }
 
+/// A failed prepare() must signal a detached decoder worker to stop.
+struct CancelOnFailure {
+    token: Arc<AtomicBool>,
+    committed: bool,
+}
+impl Drop for CancelOnFailure {
+    fn drop(&mut self) {
+        if !self.committed {
+            self.token.store(true, Ordering::Release);
+        }
+    }
+}
+
 struct FinishOnDrop(Arc<PcmRing>);
 impl Drop for FinishOnDrop {
     fn drop(&mut self) { self.0.mark_finished(); }
@@ -38,6 +51,12 @@ impl Drop for FinishOnDrop {
 /// Timeouts keep the command worker from waiting indefinitely on slow disks.
 pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Result<PreparedAudio, String> {
     let (tx, rx) = mpsc::sync_channel::<Result<TrackInfo, String>>(1);
+    let cancellation = Arc::new(AtomicBool::new(false));
+    let worker_cancel = Arc::clone(&cancellation);
+    let mut timeout_guard = CancelOnFailure {
+        token: cancellation,
+        committed: false,
+    };
     thread::Builder::new()
         .name("zillaplayer-decode-worker".into())
         .spawn(move || {
@@ -59,6 +78,7 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
                 Ok((decoder, TrackInfo { ring, channels, sample_rate, duration }))
             })();
 
+            if worker_cancel.load(Ordering::Acquire) { return; }
             let (decoder, info) = match result {
                 Ok(value) => value,
                 Err(reason) => { let _ = tx.send(Err(reason)); return; }
@@ -69,10 +89,10 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
             for sample in decoder {
                 // Backpressure and decoding happen only on this worker.
                 // Cancellation is checked even if the buffer is full.
-                if ring.is_canceled() { break; }
+                if ring.is_canceled() || worker_cancel.load(Ordering::Acquire) { break; }
                 let mut candidate = sample;
                 loop {
-                    if ring.is_canceled() { return; }
+                    if ring.is_canceled() || worker_cancel.load(Ordering::Acquire) { return; }
                     match ring.try_push(candidate) {
                         Ok(()) => break,
                         Err(sample) => {
@@ -94,12 +114,14 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
         .saturating_mul(info.channels.get() as usize) / 10;
     let deadline = Instant::now() + PREBUFFER_WAIT;
     while info.ring.available() < prebuffer &&
-        !info.ring.is_drained() &&
+        !info.ring.is_drained() && !info.ring.is_canceled() &&
         Instant::now() < deadline
     {
         thread::sleep(Duration::from_millis(3));
     }
 
+    // We have a usable source; further cancellation is owned by its PCM ring.
+    timeout_guard.committed = true;
     let visual_tap = visualizer::attach(spectrum, info.sample_rate.get(), info.channels.get());
     let cancel = Arc::clone(&info.ring);
     let duration = info.duration;
