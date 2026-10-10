@@ -285,6 +285,31 @@ mod tests {
     }
 
     #[test]
+    fn abandoned_prepare_signals_decoder_worker() {
+        let token = Arc::new(AtomicBool::new(false));
+        {
+            let _guard = CancelOnFailure {
+                token: Arc::clone(&token),
+                committed: false,
+            };
+            assert!(!token.load(Ordering::Acquire));
+        }
+        assert!(token.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn successful_prepare_does_not_cancel_playback() {
+        let token = Arc::new(AtomicBool::new(false));
+        {
+            let _guard = CancelOnFailure {
+                token: Arc::clone(&token),
+                committed: true,
+            };
+        }
+        assert!(!token.load(Ordering::Acquire));
+    }
+
+    #[test]
     fn consumer_drop_signals_decoder_cancellation() {
         let ring = PcmRing::new(4096);
         {
