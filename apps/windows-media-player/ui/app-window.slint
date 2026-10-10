@@ -50,6 +50,25 @@ export component AppWindow inherits Window {
     background: #07101e;
 
     in-out property <string> active-page: "Player";
+    in-out property <int> studio-instrument: 0;
+    in-out property <int> studio-last-note: -1;
+    in-out property <int> studio-bpm: 100;
+    in-out property <bool> studio-click-on: false;
+    in-out property <string> studio-target: "C4";
+    in-out property <string> studio-feedback: "Натисніть C4, щоб почати";
+    in-out property <string> studio-score: "0 / 0";
+    in property <[string]> studio-note-labels: [];
+    in property <[bool]> studio-mutes: [];
+    in property <[float]> studio-gains: [];
+    in property <[float]> studio-pans: [];
+    callback studio-note(int);
+    callback studio-set-gain(int,float);
+    callback studio-set-pan(int,float);
+    callback studio-toggle-mute(int);
+    callback studio-set-master(float);
+    callback studio-set-bpm(int);
+    callback studio-toggle-click(bool);
+    callback studio-reset-practice;
     in-out property <bool> uk: true;
     in-out property <string> library-query: "";
     in-out property <string> new-playlist-name: "";
@@ -147,6 +166,7 @@ export component AppWindow inherits Window {
                 }
                 NavigationItem { label: root.uk ? "▶   Плеєр" : "▶   Player"; selected: root.active-page == "Player"; activated => { root.active-page = "Player"; } }
                 NavigationItem { label: root.uk ? "♫   Бібліотека" : "♫   Library"; selected: root.active-page == "Library"; activated => { root.active-page = "Library"; } }
+                NavigationItem { label: root.uk ? "♬   Студія" : "♬   Studio"; selected: root.active-page == "Studio"; activated => { root.active-page = "Studio"; } }
                 NavigationItem { label: root.uk ? "↓   Завантаження" : "↓   Downloads"; selected: root.active-page == "Downloads"; activated => { root.active-page = "Downloads"; } }
                 NavigationItem { label: root.uk ? "☑   Задачі" : "☑   Tasks"; selected: root.active-page == "Tasks"; activated => { root.active-page = "Tasks"; } }
                 NavigationItem { label: root.uk ? "◇   Плани" : "◇   Plans"; selected: root.active-page == "Plans"; activated => { root.active-page = "Plans"; } }
@@ -727,6 +747,144 @@ export component AppWindow inherits Window {
                                                     Text { text: plan; color: #e5f4ff; vertical-alignment: center; horizontal-stretch: 1; font-size: 16px; overflow: elide; }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Studio" : VerticalLayout {
+                                    spacing: 12px;
+                                    HorizontalLayout {
+                                        Text {
+                                            text: root.uk ? "Zilla Studio · MIDI-тренажер" : "Zilla Studio · MIDI Practice";
+                                            color: #f4f8ff; font-size: 30px; font-weight: 700;
+                                        }
+                                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                                        Text {
+                                            text: root.uk ? "СИНТЕЗАТОР RUST · 4 КАНАЛИ" : "RUST SYNTH · 4 CHANNELS";
+                                            color: #48bfff; font-size: 13px; vertical-alignment: center;
+                                        }
+                                    }
+                                    Text {
+                                        text: root.uk
+                                            ? "Грайте ноти, налаштовуйте мікшер і тренуйте гамму до мажор. Це тренувальна студія, не повноцінна DAW."
+                                            : "Play notes, adjust a live mixer and practice the C major scale. This is a trainer, not a full DAW.";
+                                        color: #9db9d7; font-size: 15px;
+                                    }
+                                    Rectangle {
+                                        height: 260px; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 15px; spacing: 12px;
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Text { text: root.uk ? "ІНСТРУМЕНТ" : "INSTRUMENT"; color: #8fcef9; font-size: 14px; vertical-alignment: center; }
+                                                for name[i] in ["Piano", "Bass", "Lead", "Pad"] : Button {
+                                                    text: (root.studio-instrument == i ? "● " : "○ ") + name;
+                                                    clicked => { root.studio-instrument = i; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Text {
+                                                    text: root.uk ? "Остання нота: " + (root.studio-last-note < 0 ? "—" : root.studio-note-labels[root.studio-last-note - 60])
+                                                       : "Last note: " + (root.studio-last-note < 0 ? "—" : root.studio-note-labels[root.studio-last-note - 60]);
+                                                    color: #4fcaff; font-size: 13px; vertical-alignment: center;
+                                                }
+                                            }
+                                            ScrollView {
+                                                horizontal-stretch: 1;
+                                                vertical-stretch: 1;
+                                                content-width: 1110px;
+                                                content-height: 173px;
+                                                horizontal-scrollbar-policy: as-needed;
+                                                vertical-scrollbar-policy: always-off;
+                                                HorizontalLayout {
+                                                    spacing: 2px;
+                                                    for pitch[i] in [60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83] : Rectangle {
+                                                        width: 44px;
+                                                        height: (pitch % 12 == 1 || pitch % 12 == 3 ||
+                                                                 pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? 117px : 162px;
+                                                        background: root.studio-last-note == pitch ? #4dcfff :
+                                                            (pitch % 12 == 1 || pitch % 12 == 3 ||
+                                                             pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? #182537 : #e2edf9;
+                                                        border-radius: 6px;
+                                                        VerticalLayout {
+                                                            padding: 4px;
+                                                            spacing: 4px;
+                                                            Rectangle { vertical-stretch: 1; background: transparent; }
+                                                            Text {
+                                                                text: root.studio-note-labels[i];
+                                                                color: (pitch % 12 == 1 || pitch % 12 == 3 ||
+                                                                        pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? #9dd7ff : #19304e;
+                                                                horizontal-alignment: center;
+                                                                font-size: 12px;
+                                                                font-weight: 700;
+                                                            }
+                                                        }
+                                                        TouchArea { clicked => { root.studio-note(pitch); } }
+                                                    }
+                                                }
+                                            }
+                                            Text { text: root.uk ? "2 октави · C4–B5 · поліфонія · чотири тембри" : "2 octaves · C4–B5 · polyphony · four timbres"; color: #7eb6da; font-size: 12px; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 257px; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px; spacing: 9px;
+                                            HorizontalLayout {
+                                                Text { text: root.uk ? "МІКШЕР" : "MIXER"; color: #e8f5ff; font-size: 17px; font-weight: 700; }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Text { text: root.uk ? "Живе керування гучністю / панорамою" : "Live gain / pan control"; color: #8eafd4; font-size: 12px; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 9px;
+                                                for name[i] in ["PIANO","BASS","LEAD","PAD"] : Rectangle {
+                                                    horizontal-stretch: 1; background: #172b47; border-radius: 8px;
+                                                    VerticalLayout {
+                                                        padding: 10px; spacing: 8px;
+                                                        HorizontalLayout {
+                                                            Text { text: name; color: #bfe6ff; font-size: 15px; font-weight: 700; }
+                                                            Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                            Button {
+                                                                text: root.studio-mutes[i] ? "MUTED" : "MUTE";
+                                                                clicked => { root.studio-toggle-mute(i); }
+                                                            }
+                                                        }
+                                                        Text { text: root.uk ? "Рівень" : "Level"; color: #8dadcf; font-size: 12px; }
+                                                        Slider { minimum: 0; maximum: 100; value: root.studio-gains[i]; changed(v) => { root.studio-set-gain(i,v); } }
+                                                        Text { text: root.uk ? "Панорама  L — R" : "Pan  L — R"; color: #8dadcf; font-size: 12px; }
+                                                        Slider { minimum: -100; maximum: 100; value: root.studio-pans[i]; changed(v) => { root.studio-set-pan(i,v); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px; spacing: 12px;
+                                            HorizontalLayout {
+                                                Text { text: root.uk ? "ТРЕНУВАННЯ · ГАММА ДО МАЖОР" : "PRACTICE · C MAJOR SCALE"; color: #e9f6ff; font-size: 16px; font-weight: 700; }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Text { text: (root.uk ? "Рахунок: " : "Score: ") + root.studio-score; color: #59c9ff; font-size: 15px; }
+                                                Button { text: root.uk ? "Спочатку" : "Reset"; clicked => { root.studio-reset-practice(); } }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 14px;
+                                                Text { text: (root.uk ? "Зіграй ноту: " : "Play note: ") + root.studio-target; font-size: 26px; font-weight: 700; color: #f7fcff; vertical-alignment: center; }
+                                                Text { text: root.studio-feedback; color: #85dfff; font-size: 14px; vertical-alignment: center; }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Button {
+                                                    text: root.studio-click-on ? (root.uk ? "● Метроном УВІМК." : "● Metronome ON")
+                                                                               : (root.uk ? "○ Метроном ВИМК." : "○ Metronome OFF");
+                                                    clicked => {
+                                                        root.studio-click-on = !root.studio-click-on;
+                                                        root.studio-toggle-click(root.studio-click-on);
+                                                    }
+                                                }
+                                                Text { text: "" + root.studio-bpm + " BPM"; color: #8fd9fc; vertical-alignment: center; font-size: 14px; }
+                                                Button { text: "−"; clicked => { root.studio-bpm = max(40,root.studio-bpm - 10); root.studio-set-bpm(root.studio-bpm); } }
+                                                Button { text: "+"; clicked => { root.studio-bpm = min(240,root.studio-bpm + 10); root.studio-set-bpm(root.studio-bpm); } }
+                                            }
+                                            Text { text: root.uk ? "Звук синтезується окремо від плеєра. MIDI-вхід з фізичної клавіатури, запис і piano roll — наступні кроки." :
+                                                "The synthesizer is separate from playback. Hardware MIDI input, recording and piano roll come next."; color: #8daecc; font-size: 13px; }
                                         }
                                     }
                                 }
