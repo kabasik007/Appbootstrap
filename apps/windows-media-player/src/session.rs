@@ -2,6 +2,7 @@
 //! All JSON/filesystem operations run on a dedicated worker, NEVER on Slint
 //! or the Rodio output callback. This is an interim v1 session format;
 //! the full searchable library will later migrate to SQLite.
+use crate::presets::{self, EqPreset};
 use std::{
     cell::RefCell,
     fs,
@@ -14,10 +15,26 @@ use std::{
 const MAX_TRACKS: usize = 50_000;
 const MAX_BYTES: u64 = 16 * 1024 * 1024;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NamedPlaylist {
+    pub name: String,
+    pub tracks: Vec<PathBuf>,
+}
+#[derive(Debug, Clone)]
 pub struct SavedSession {
     pub tracks: Vec<PathBuf>,
     pub selected: Option<usize>,
+    pub playlists: Vec<NamedPlaylist>,
+    pub presets: Vec<EqPreset>,
+    pub last_eq: EqPreset,
+}
+impl Default for SavedSession {
+    fn default() -> Self {
+        Self {
+            tracks: Vec::new(), selected: None, playlists: Vec::new(),
+            presets: Vec::new(), last_eq: EqPreset::flat(),
+        }
+    }
 }
 
 impl SavedSession {
@@ -26,6 +43,15 @@ impl SavedSession {
         if self.selected.is_some_and(|i| i >= self.tracks.len()) {
             self.selected = None;
         }
+        self.playlists.truncate(64);
+        self.playlists.retain_mut(|playlist| {
+            playlist.name = playlist.name.trim().chars().take(64).collect();
+            playlist.tracks.truncate(MAX_TRACKS);
+            !playlist.name.is_empty()
+        });
+        self.presets.truncate(24);
+        self.presets = self.presets.into_iter().map(EqPreset::sanitize).collect();
+        self.last_eq = self.last_eq.sanitize();
         self
     }
 }
@@ -138,7 +164,23 @@ fn read_one(path: &Path) -> io::Result<Option<SavedSession>> {
     }
     let selected = value.get("selected").and_then(|v| v.as_u64())
         .and_then(|index| usize::try_from(index).ok());
-    Ok(Some(SavedSession { tracks, selected }.sanitized()))
+    // Fields introduced after session v1 are OPTIONAL, so an existing
+    // installed alpha keeps its saved queue during the upgrade.
+    let playlists = value.get("playlists").and_then(|v| v.as_array())
+        .map(|entries| entries.iter().take(64).filter_map(|entry| {
+            let name = entry.get("name")?.as_str()?.to_string();
+            let items = entry.get("tracks")?.as_array()?;
+            let tracks = items.iter().take(MAX_TRACKS)
+                .map(|item| item.as_str().map(PathBuf::from))
+                .collect::<Option<Vec<_>>>()?;
+            Some(NamedPlaylist { name, tracks })
+        }).collect()).unwrap_or_default();
+    let presets = value.get("presets").and_then(|v| v.as_array())
+        .map(|entries| entries.iter().take(24).filter_map(presets::from_json).collect())
+        .unwrap_or_default();
+    let last_eq = value.get("last_eq").and_then(presets::from_json)
+        .unwrap_or_else(EqPreset::flat);
+    Ok(Some(SavedSession { tracks, selected, playlists, presets, last_eq }.sanitized()))
 }
 
 fn write_to(path: &Path, snapshot: &SavedSession) -> io::Result<()> {
@@ -149,6 +191,11 @@ fn write_to(path: &Path, snapshot: &SavedSession) -> io::Result<()> {
         "version": 1,
         "tracks": snapshot.tracks.iter().map(|p| p.to_string_lossy().to_string()).collect::<Vec<_>>(),
         "selected": snapshot.selected,
+        "playlists": snapshot.playlists.iter().map(|p| serde_json::json!({
+            "name": p.name, "tracks": p.tracks.iter().map(|v| v.to_string_lossy().to_string()).collect::<Vec<_>>()
+        })).collect::<Vec<_>>(),
+        "presets": snapshot.presets.iter().map(presets::to_json).collect::<Vec<_>>(),
+        "last_eq": presets::to_json(&snapshot.last_eq),
     });
     let payload = serde_json::to_vec(&value).map_err(io::Error::other)?;
     if payload.len() as u64 > MAX_BYTES {
@@ -191,6 +238,8 @@ mod tests {
         let before = SavedSession {
             tracks: vec![PathBuf::from("C:/Музика/Трек №1.flac"), PathBuf::from("D:/play.mp3")],
             selected: Some(1),
+            ..SavedSession::default()
+
         };
         write_to(&path, &before).unwrap();
         let read = read_from(&path).unwrap();
@@ -204,10 +253,14 @@ mod tests {
         let path = temp_path();
         let initial = SavedSession {
             tracks: vec![PathBuf::from("ok.wav")], selected: Some(0),
+            ..SavedSession::default()
+
         };
         write_to(&path, &initial).unwrap();
         write_to(&path, &SavedSession {
             tracks: vec![PathBuf::from("new.wav")], selected: Some(0),
+            ..SavedSession::default()
+
         }).unwrap();
         fs::write(&path, b"corrupt-json").unwrap();
         let recovered = read_from(&path).unwrap();
@@ -221,14 +274,20 @@ mod tests {
         let path = temp_path();
         let first = SavedSession {
             tracks: vec![PathBuf::from("first.flac")], selected: Some(0),
+            ..SavedSession::default()
+
         };
         write_to(&path, &first).unwrap();
         write_to(&path, &SavedSession {
             tracks: vec![PathBuf::from("second.mp3")], selected: Some(0),
+            ..SavedSession::default()
+
         }).unwrap();
         fs::write(&path, b"{garbled").unwrap();
         write_to(&path, &SavedSession {
             tracks: vec![PathBuf::from("third.wav")], selected: Some(0),
+            ..SavedSession::default()
+
         }).unwrap();
         assert_eq!(read_from(&path).unwrap().tracks[0], PathBuf::from("third.wav"));
         assert_eq!(read_one(&path.with_extension("json.bak")).unwrap()
@@ -238,9 +297,43 @@ mod tests {
     }
 
     #[test]
+    fn named_playlists_and_custom_eq_survive_restart() {
+        let path = temp_path();
+        let stored = SavedSession {
+            tracks: vec![PathBuf::from("one.flac")],
+            selected: Some(0),
+            playlists: vec![NamedPlaylist {
+                name: "Для тренувань".into(),
+                tracks: vec![PathBuf::from("song.mp3"), PathBuf::from("clip.wav")],
+            }],
+            presets: vec![crate::presets::factory()[3].clone()],
+            last_eq: crate::presets::factory()[4].clone(),
+        };
+        write_to(&path, &stored).unwrap();
+        let recovered = read_from(&path).unwrap();
+        assert_eq!(recovered.playlists, stored.playlists);
+        assert_eq!(recovered.presets, stored.presets);
+        assert_eq!(recovered.last_eq, stored.last_eq);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn old_v1_session_works_without_new_fields() {
+        let path = temp_path();
+        fs::write(&path, br#"{"version":1,"tracks":["previous.mp3"],"selected":0}"#).unwrap();
+        let restored = read_from(&path).unwrap();
+        assert_eq!(restored.tracks.len(), 1);
+        assert!(restored.playlists.is_empty());
+        assert!(restored.presets.is_empty());
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn never_restore_out_of_range_selection() {
         let state = SavedSession {
             tracks: vec![PathBuf::from("song.mp3")], selected: Some(150),
+            ..SavedSession::default()
+
         };
         assert_eq!(state.sanitized().selected, None);
     }
