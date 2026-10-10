@@ -16,6 +16,7 @@ mod presets;
 mod queue;
 mod roadmap;
 mod session;
+mod studio;
 mod visualizer;
 
 use audio::{start_audio_worker, AudioController, Command};
@@ -28,6 +29,7 @@ use playback::{format_duration, Transport};
 use queue::PlayQueue;
 use presets::EqPreset;
 use session::{NamedPlaylist, SavedSession, SessionStore};
+use studio::{Practice, Studio};
 use slint::{ComponentHandle, Model, SharedString, VecModel};
 use visualizer::BANDS;
 use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc,
@@ -170,6 +172,88 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     ui.set_roadmap_items(milestone_model.into());
     ui.set_focus_tasks(task_model.into());
+    // The studio owns an independent audio stream and has no disk/decoder work.
+    // Do not acquire a second device until the first studio note or click.
+    let studio = Rc::new(Studio::start());
+    let studio_notes: Rc<VecModel<SharedString>> = Rc::new(VecModel::from(
+        (60_u8..=83).map(|pitch| SharedString::from(studio::pitch_label(pitch)))
+            .collect::<Vec<_>>()
+    ));
+    ui.set_studio_note_labels(studio_notes.into());
+    let mixer_gains: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![65.0;4]));
+    let mixer_pans: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0;4]));
+    let mixer_mutes: Rc<VecModel<bool>> = Rc::new(VecModel::from(vec![false;4]));
+    ui.set_studio_gains(mixer_gains.clone().into());
+    ui.set_studio_pans(mixer_pans.clone().into());
+    ui.set_studio_mutes(mixer_mutes.clone().into());
+    let practice = Rc::new(RefCell::new(Practice::new()));
+
+    let synth = studio.clone();
+    let training = practice.clone();
+    let weak = ui.as_weak();
+    ui.on_studio_note(move |pitch| {
+        let Ok(pitch) = u8::try_from(pitch) else { return; };
+        if !(60..=83).contains(&pitch) { return; }
+        let Some(window) = weak.upgrade() else { return; };
+        let instrument = window.get_studio_instrument().clamp(0, 3) as usize;
+        synth.note(instrument, pitch, 0.85);
+        window.set_studio_last_note(pitch as i32);
+        let mut state = training.borrow_mut();
+        let ok = state.press(pitch);
+        let (hits, attempts) = state.score();
+        window.set_studio_score(format!("{hits} / {attempts}").into());
+        window.set_studio_target(studio::pitch_label(state.target()).into());
+        window.set_studio_feedback(if ok {
+            "✓ Правильно! Наступна нота".into()
+        } else {
+            format!("Спробуйте {}", studio::pitch_label(state.target())).into()
+        });
+    });
+
+    let synth = studio.clone();
+    let model = mixer_gains.clone();
+    ui.on_studio_set_gain(move |channel, level| {
+        if (0..4).contains(&channel) {
+            synth.gain(channel as usize, level/100.);
+            model.set_row_data(channel as usize, level.clamp(0., 100.));
+        }
+    });
+    let synth = studio.clone();
+    let model = mixer_pans.clone();
+    ui.on_studio_set_pan(move |channel, pan| {
+        if (0..4).contains(&channel) {
+            synth.pan(channel as usize, pan/100.);
+            model.set_row_data(channel as usize, pan.clamp(-100., 100.));
+        }
+    });
+    let synth = studio.clone();
+    let model = mixer_mutes.clone();
+    ui.on_studio_toggle_mute(move |channel| {
+        if (0..4).contains(&channel) {
+            let index = channel as usize;
+            let next = !model.row_data(index).unwrap_or(false);
+            synth.mute(index, next);
+            model.set_row_data(index, next);
+        }
+    });
+    let synth = studio.clone();
+    ui.on_studio_set_master(move |value| { synth.master(value/100.); });
+    let synth = studio.clone();
+    ui.on_studio_set_bpm(move |bpm| { synth.bpm(bpm.clamp(40,240) as u16); });
+    let synth = studio.clone();
+    ui.on_studio_toggle_click(move |enabled| { synth.metronome(enabled); });
+    let training = practice.clone();
+    let weak = ui.as_weak();
+    ui.on_studio_reset_practice(move || {
+        training.borrow_mut().reset();
+        if let Some(window) = weak.upgrade() {
+            window.set_studio_target("C4".into());
+            window.set_studio_score("0 / 0".into());
+            window.set_studio_feedback("Починаємо з C4".into());
+            window.set_studio_last_note(-1);
+        }
+    });
+
     let AudioController { commands, updates, spectrum } = start_audio_worker();
     // Spectrum values are published by an isolated FFT thread. Slint receives
     // only throttled ready-to-draw f32 model updates, never PCM arrays.
@@ -953,6 +1037,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
+    studio.shutdown();
     #[cfg(windows)]
     if let Some(keys) = media_keys.borrow_mut().take() { keys.shutdown(); }
     downloader.shutdown();
