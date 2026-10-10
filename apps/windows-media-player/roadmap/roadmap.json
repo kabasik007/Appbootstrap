@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: EQ sliders and FFT both corrected to rise upwards. yt-dlp/FFmpeg locator improved incl bundled tools and WinGet PATH, no redistributed binaries. Metadata-only analyzer, 100-item preview and selective playlist download added. CI and real site behavior pending; no YouTube Music integration.",
+  "status_note": "2026-10-10: User feedback: progress resets on track switch; fast EQ horizontal page controls; playlist/queue scroll; sort by filename, folder, rating; persisted 0–5 star ratings; best-effort Windows multimedia hotkeys. Windows CI validation underway.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -60,7 +60,7 @@
           "title": "Open audio, Play/Pause/Stop, seek, master volume",
           "priority": "blocker",
           "status": "implemented_unverified",
-          "verification": "Windows manual smoke + transport tests"
+          "verification": "Open/next/previous/auto-advance now reset seek/elapsed immediately in UI and new audio state. Media keyboard Play/Pause/Stop/Next/Previous uses Win32 hotkey worker; physical keyboard and playback manual smoke pending."
         },
         {
           "id": "ZP-102",
@@ -74,7 +74,7 @@
           "title": "Coalesced transport commands and cancellation generations",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Adjacent Seek command coalescing exists; timeout/failed decoder setup now has cancellation guard. Need transport epochs, superseded seek cancellation and Windows rapid-switch stress."
+          "verification": "Adjacent seek coalescing and setup cancellation exist. Reset-on-switch bug fixed on both Slint and audio timeline, preserving previous state on open failure. Transport epochs and 500-switch test still pending."
         },
         {
           "id": "ZP-104",
@@ -155,14 +155,14 @@
           "title": "Persist folders and playlists in SQLite with migrations",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Named playlist creation, update, delete and restore via background JSON session worker implemented and 46 Windows Rust tests passed; SQLite indexing/migrations still pending."
+          "verification": "Named playlists and 1-5 star ratings persist in backward-compatible session-v1.json; scrollable list implemented. SQLite indexes/migrations remain pending."
         },
         {
           "id": "ZP-303",
           "title": "Virtualized searchable library, sorting and metadata tags",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Search by filename and page through 12 tracks at a time; mapping to correct queue index implemented. Sorting, metadata tags, index and load-time benchmarking pending."
+          "verification": "Filename query, 12-track page, order/name asc/desc/folder/stars sort, selectable 0-5 user ratings, stable queue mapping and scroll views implemented. Tags/SQLite and UI stress testing pending."
         },
         {
           "id": "ZP-304",
@@ -296,7 +296,7 @@
           "title": "Windows clean install/upgrade/uninstall/portable packaging",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Unsigned portable Windows x64 alpha created from run 38036361366 (46 Rust tests/scan smoke passed). Installer, clean update, MSVC/smart screen and Win10/11 validation pending."
+          "verification": "Windows release CI with portable ZIP and SHA256 exists. New media key, playlist scroll, stars, sorting and fast EQ pan compiled/tested in CI; Win10/11 manual testing, installer and signing pending."
         },
         {
           "id": "ZP-702",
