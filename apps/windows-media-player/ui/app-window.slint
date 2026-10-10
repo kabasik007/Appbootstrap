@@ -80,6 +80,7 @@ export component AppWindow inherits Window {
     callback cancel-download(int);
     callback retry-download(int);
     callback check-download-tools;
+    callback clear-download-history;
     in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
     in-out property <string> track-title: "Трек не вибрано";
     in-out property <bool> playing: false;
@@ -525,6 +526,10 @@ export component AppWindow inherits Window {
                                                 Text {
                                                     text: "" + root.download-job-rows.length + (root.uk ? " завдань" : " jobs");
                                                     color: #70c9ff; font-size: 13px;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Очистити завершені" : "Clear finished";
+                                                    clicked => { root.clear-download-history(); }
                                                 }
                                             }
                                             Rectangle { height: 1px; background: #294361; }
