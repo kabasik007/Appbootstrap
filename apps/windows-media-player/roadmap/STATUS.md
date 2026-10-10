@@ -51,7 +51,7 @@
 | --- | --- | --- | --- | --- |
 | ZP-201 | high | 31-band EQ + bass/treble + preamp + bypass + loudness prototype | implemented_unverified | Rust DSP tests plus listening and frequency sweeps |
 | ZP-202 | blocker | Move EQ coefficient design from callback into control worker | implemented_unverified | Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling |
-| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain. |
+| ZP-203 | high | Complete editable 31-band GUI and 10-band compact preset view | in_progress | Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain. EQ slider visual coordinate inverted (+12 at top, 0 center, -12 bottom) without modifying DSP; test pending. |
 | ZP-204 | high | Gain staging, ReplayGain, limiter and clipping meter | todo | Peak/response and clipping tests |
 | ZP-205 | medium | User-defined DSP presets with import/export | in_progress | Custom EQ presets and last curve persist to backward-compatible session-v1.json; preset-specific standalone import/export and migration to schema-v2 pending. |
 
@@ -73,7 +73,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | implemented_unverified | Bounded PCM tap, separate RustFFT worker, Hann-2048 FFT, log 32-band atomics and 20 FPS Slint model committed; generated sine tests and Windows builds/perf/listening pending |
+| ZP-401 | high | Nonblocking PCM telemetry tap and FFT analysis worker | implemented_unverified | Bounded PCM tap, separate RustFFT worker, Hann-2048 FFT, log 32-band atomics and 20 FPS Slint model committed; generated sine tests and Windows builds/perf/listening pending FFT bars now bottom-anchored to grow upward; UI build pending. |
 | ZP-402 | medium | Spectrum, oscilloscope, waveform, VU and peak-meter views | in_progress | Dynamic real spectrum bars and PCM peak meter implemented in source; oscilloscope, waveform, multichannel VU and hardware validation still pending |
 | ZP-403 | medium | Custom skins, resizable panels, DPI and compact Winamp-like mode | todo | 125/150/200% DPI and keyboard tests |
 | ZP-404 | medium | Throttle/freeze visualizer when minimized or battery-saving | todo | Idle CPU benchmark |
@@ -84,8 +84,8 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-501 | high | yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity | in_progress | Rust probes for yt-dlp, FFmpeg, Deno plus external executable discovery added; require Windows tool/version integration, licensing and checksum review. |
-| ZP-502 | high | URL analysis, playlist selection and safe format presets | in_progress | Safe fixed argument profiles MP3 320K, original audio, 1080/1440p MKV FFmpeg merge and playlist cap 200 coded; analysis preview and individual selection not implemented. |
+| ZP-501 | high | yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity | in_progress | Portable-relative tools, tools/yt-dlp, tools/ffmpeg/bin, WinGet Links and PATH executable detection plus explicit --ffmpeg-location implemented. No third-party binaries bundled pending license/hash review; Windows tests pending. |
+| ZP-502 | high | URL analysis, playlist selection and safe format presets | in_progress | Dedicated bounded 35s yt-dlp --flat-playlist JSON analyzer, preview max 100, item selection, all/none controls and persisted --playlist-items added. Windows CI + source-specific integration pending; metadata only (no Google Music). |
 | ZP-503 | high | Bounded persisted job queue, retry/cancel and progress IPC | implemented_unverified | Background single-worker queue, progress, cancel/retry, disk-persisted job history and crash interruption behavior coded. Rust/Windows compiler test and live network simulation pending. |
 | ZP-504 | medium | Postprocess audio, sanitize destinations and auto-import completed files | in_progress | FFmpeg postprocess through yt-dlp, destination control, output file reporting and audio library import coded; path stress and video library auto-import pending. |
 
