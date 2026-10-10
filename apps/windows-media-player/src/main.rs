@@ -1,4 +1,5 @@
-#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+// Alpha Windows test build uses console subsystem so --scan-worker can reliably
+// inherit JSONL stdout pipes. Split GUI/scanner binaries before public release.
 
 mod audio;
 mod decode_worker;
