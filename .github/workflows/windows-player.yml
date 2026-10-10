@@ -45,11 +45,24 @@ jobs:
         run: cargo test
       - name: Build release executable
         run: cargo build --release
-      - name: Upload unsigned development build
+      - name: Create downloader alpha portable ZIP
+        shell: pwsh
+        run: |
+          $destination = Join-Path $PWD "portable/ZillaPlayer"
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $exe = Join-Path $PWD "target/release/zillaplayer.exe"
+          Copy-Item $exe (Join-Path $destination "zillaplayer.exe")
+          Copy-Item "README_DOWNLOADS_UA.txt" (Join-Path $destination "README_DOWNLOADS_UA.txt")
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path (Join-Path $destination "SHA256SUMS.txt") -Value "$hash  zillaplayer.exe"
+          Compress-Archive -Path $destination -DestinationPath (Join-Path $PWD "portable/ZillaPlayer-Downloader-Alpha-Windows-x64.zip") -Force
+      - name: Upload unsigned portable alpha
         uses: actions/upload-artifact@v4
         with:
-          name: zillaplayer-windows-x64-alpha-unsigned
-          path: apps/windows-media-player/target/release/zillaplayer.exe
+          name: zillaplayer-downloader-windows-x64-alpha
+          path: |
+            apps/windows-media-player/portable/ZillaPlayer-Downloader-Alpha-Windows-x64.zip
+            apps/windows-media-player/target/release/zillaplayer.exe
           if-no-files-found: error
           retention-days: 14
       - name: Smoke-test scanner in actual Windows child-process mode
