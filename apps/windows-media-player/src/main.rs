@@ -515,6 +515,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // URL edits or mode changes must not leave a misleading old preview.
+    let state = preview_state.clone();
+    let pending = pending_preview.clone();
+    let rows = preview_rows.clone();
+    let weak = ui.as_weak();
+    ui.on_invalidate_download_preview(move || {
+        state.borrow_mut().take();
+        pending.borrow_mut().take();
+        rows.set_vec(Vec::new());
+        if let Some(window) = weak.upgrade() {
+            window.set_download_preview_status("".into());
+        }
+    });
+
     // Analysis is metadata-only, async and independent of audio playback.
     let weak = ui.as_weak();
     let pending = pending_preview.clone();
