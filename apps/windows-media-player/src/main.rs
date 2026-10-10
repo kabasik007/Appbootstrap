@@ -4,6 +4,7 @@
 mod audio;
 mod decode_worker;
 mod dsp;
+mod downloader;
 mod library;
 mod playback;
 mod pcm_ring;
@@ -16,6 +17,7 @@ mod visualizer;
 
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
+use downloader::{Downloader, Format};
 use playback::{format_duration, Transport};
 use queue::PlayQueue;
 use presets::EqPreset;
@@ -187,6 +189,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let session = Rc::new(SessionStore::start()?);
     let session_dirty = Rc::new(Cell::new(false));
     let user_touched_queue = Rc::new(Cell::new(false));
+    // The download actor persists its own queue and owns all yt-dlp/FFmpeg
+    // children independently of Slint and the audio engine.
+    let downloader = Rc::new(Downloader::start());
+    ui.set_download_folder(downloader::suggested_folder().to_string_lossy().to_string().into());
+    let download_rows: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
+    ui.set_download_job_rows(download_rows.clone().into());
     let (playlist_tx, playlist_rx) = mpsc::channel::<PlaylistEvent>();
 
     let import_tx = playlist_tx.clone();
@@ -501,6 +509,35 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    let dl = downloader.clone();
+    let weak = ui.as_weak();
+    ui.on_enqueue_download(move || {
+        let Some(window) = weak.upgrade() else { return; };
+        let url = window.get_download_url().to_string();
+        let folder = PathBuf::from(window.get_download_folder().as_str());
+        let profile = Format::by_index(window.get_download_profile());
+        dl.queue(url, profile, window.get_download_playlist(), folder);
+        window.set_download_status("Додано запит. Перевірка URL та інструментів у фоновому потоці...".into());
+    });
+    let dl = downloader.clone();
+    ui.on_check_download_tools(move || { dl.probe(); });
+    let dl = downloader.clone();
+    ui.on_cancel_download(move |index| {
+        if index >= 0 { dl.cancel(index as usize); }
+    });
+    let dl = downloader.clone();
+    ui.on_retry_download(move |index| {
+        if index >= 0 { dl.retry(index as usize); }
+    });
+    let weak = ui.as_weak();
+    ui.on_choose_download_folder(move || {
+        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+            if let Some(window) = weak.upgrade() {
+                window.set_download_folder(path.to_string_lossy().to_string().into());
+            }
+        }
+    });
+
     // UI only: consume ready messages without blocking. No scanning or decoding.
     let scanner_shutdown = scanner.clone();
     let command_shutdown = commands.clone();
@@ -519,11 +556,45 @@ fn main() -> Result<(), Box<dyn Error>> {
     let restore_selected = selected_playlist.clone();
     let restore_commands = commands.clone();
     let library_for_timer = library.clone();
+    let dl_for_timer = downloader.clone();
+    let dl_rows = download_rows.clone();
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(200), move || {
         let Some(window) = weak.upgrade() else { return };
+        // The supervisor runs independently; reading this snapshot never
+        // invokes yt-dlp/FFmpeg or blocks the sound output.
+        if window.get_active_page().as_str() == "Downloads" {
+            let snapshot = dl_for_timer.snapshot();
+            window.set_download_tool_status(snapshot.tools.into());
+            window.set_download_status(snapshot.message.into());
+            let rows: Vec<SharedString> = snapshot.jobs.iter().map(|job| {
+                SharedString::from(format!("#{}  {}  {}{}  {:.1}%  |  {}",
+                    job.id, job.format.label(),
+                    if job.playlist { "[Плейлист] " } else { "" },
+                    job.phase.as_str(), job.progress, job.detail))
+            }).collect();
+            if rows.len() != dl_rows.row_count() ||
+               rows.iter().enumerate().any(|(i, row)| dl_rows.row_data(i).as_ref() != Some(row)) {
+                dl_rows.set_vec(rows);
+            }
+        }
+        // Completed authorized local audio files can join the local queue.
+        let finished_files = dl_for_timer.take_imported();
+        if !finished_files.is_empty() {
+            let mut q = queue.borrow_mut();
+            let count = finished_files.len();
+            for file in finished_files {
+                if !q.snapshot().iter().any(|path|path==&file) {
+                    q.append(vec![file]);
+                }
+            }
+            drop(q);
+            dirty_for_updates.set(true);
+            refresh_library(&library_for_timer);
+            window.set_notice(format!("Додано медіафайли до бібліотеки: {count}").into());
+        }
         // Restore only if user has not already started a scan or changed the queue.
         // Loading happens in the persistence worker; nothing reads disk here.
         if let Some(loaded) = session_for_updates.poll_loaded() {
@@ -635,6 +706,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
+    downloader.shutdown();
     scanner_shutdown.shutdown();
     let _ = command_shutdown.send(Command::Shutdown);
     // Flush the latest state and join I/O worker before exiting.
