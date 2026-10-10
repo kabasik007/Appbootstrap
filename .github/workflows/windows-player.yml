@@ -33,6 +33,8 @@ jobs:
           python-version: "3.12"
       - name: Check roadmap schema and generated plan
         run: python tools/roadmap_sync.py --check
+      - name: Validate full EQ UI contract
+        run: python tools/check_ui_contract.py
       - name: Check project
         run: cargo check
       - name: Run Rust tests
