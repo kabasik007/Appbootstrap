@@ -550,6 +550,37 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    let weak = ui.as_weak();
+    let state = preview_state.clone();
+    let rows = preview_rows.clone();
+    ui.on_select_download_preview(move |select_all| {
+        let mut preview = state.borrow_mut();
+        let Some(list) = preview.as_mut() else { return; };
+        for item in list.items.iter_mut() { item.selected = select_all; }
+        rows.set_vec(list.items.iter().map(|i| SharedString::from(row_title(i)))
+            .collect::<Vec<_>>());
+        if let Some(window) = weak.upgrade() {
+            window.set_download_preview_status(format!(
+                "{} · обрано {} із {}", list.title,
+                if select_all { list.items.len() } else { 0 }, list.items.len()
+            ).into());
+        }
+    });
+
+    ui.on_open_download_help(move || {
+        // Open only our own bundled text document; never execute user-supplied
+        // download URLs or launch a shell.
+        if let Ok(binary) = std::env::current_exe() {
+            if let Some(folder) = binary.parent() {
+                let document = folder.join("README_DOWNLOADS_UA.txt");
+                if document.is_file() {
+                    #[cfg(windows)]
+                    { let _ = std::process::Command::new("notepad.exe").arg(document).spawn(); }
+                }
+            }
+        }
+    });
+
     let dl = downloader.clone();
     let preview = preview_state.clone();
     let weak = ui.as_weak();
