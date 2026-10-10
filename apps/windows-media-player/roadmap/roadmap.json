@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "product": "ZillaPlayer",
+  "as_of": "2026-10-10",
+  "status_note": "2026-10-10: Added P8 Zilla Studio MVP in Rust/Slint: 24-key two-octave virtual MIDI piano, four procedural synth timbres, four-channel mixer with gain/pan/mute/master, click metronome 40–240 BPM, C-major drill. Physical MIDI hardware, recording and piano roll pending. Windows CI and audible tests pending.",
+  "statuses": {
+    "todo": "Planned",
+    "in_progress": "In progress",
+    "implemented_unverified": "Code written / not verified",
+    "blocked": "Blocked",
+    "verified": "Verified"
+  },
+  "phases": [
+    {
+      "id": "P0",
+      "name": "Toolchain & architecture",
+      "status": "in_progress",
+      "goal": "Get a reproducible Windows build and a defensible threading design",
+      "gate": "cargo fmt --check, cargo clippy -D warnings, cargo test, Windows release EXE and playback smoke all evidenced",
+      "tasks": [
+        {
+          "id": "ZP-001",
+          "title": "Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock",
+          "priority": "blocker",
+          "status": "in_progress",
+          "verification": "GitHub Actions Windows run 38036361366: cargo check, 46 Rust tests, release EXE and scanner subprocess smoke passed. Cargo.lock uploaded as artifact; commit for reproducibility and audio hardware smoke remain."
+        },
+        {
+          "id": "ZP-002",
+          "title": "Profile startup, memory, CPU and callback timing on Windows 10/11",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Repeatable measurements on declared x64 hardware"
+        },
+        {
+          "id": "ZP-003",
+          "title": "Create module boundaries, P0 technical ADRs and roadmap source",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Review and validate repo plan JSON + documentation"
+        },
+        {
+          "id": "ZP-004",
+          "title": "Check Slint, FFmpeg and yt-dlp distribution licenses",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Signed-off license matrix"
+        }
+      ]
+    },
+    {
+      "id": "P1",
+      "name": "Reliable local playback",
+      "status": "in_progress",
+      "goal": "Local playback must remain responsive during scan and seeking",
+      "gate": "MP3/FLAC/WAV playback, 500 seek/pause/switch loops and unplug/replug recovery",
+      "tasks": [
+        {
+          "id": "ZP-101",
+          "title": "Open audio, Play/Pause/Stop, seek, master volume",
+          "priority": "blocker",
+          "status": "implemented_unverified",
+          "verification": "Open/next/previous/auto-advance now reset seek/elapsed immediately in UI and new audio state. Media keyboard Play/Pause/Stop/Next/Previous uses Win32 hotkey worker; physical keyboard and playback manual smoke pending."
+        },
+        {
+          "id": "ZP-102",
+          "title": "Replace decoder-on-callback with background producer and bounded PCM ring",
+          "priority": "blocker",
+          "status": "implemented_unverified",
+          "verification": "Background Rodio decoder, bounded atomic PCM SPSC ring and nonblocking output source added. Generated WAV unit fixture + Windows cargo test, seek stress and underrun profiling required."
+        },
+        {
+          "id": "ZP-103",
+          "title": "Coalesced transport commands and cancellation generations",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Adjacent seek coalescing and setup cancellation exist. Reset-on-switch bug fixed on both Slint and audio timeline, preserving previous state on open failure. Transport epochs and 500-switch test still pending."
+        },
+        {
+          "id": "ZP-104",
+          "title": "Click-free pause, stop, seek and track switch with short audio fades",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Listen and analyze waveforms for clicks"
+        },
+        {
+          "id": "ZP-105",
+          "title": "Detect and recover missing/changed WASAPI output devices",
+          "priority": "high",
+          "status": "todo",
+          "verification": "USB/speaker device change tests"
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Advanced DSP / EQ",
+      "status": "in_progress",
+      "goal": "Audible, stable EQ that remains real-time safe",
+      "gate": "Frequency response and signal tests, real hardware performance budget, no audible zipper/clicks",
+      "tasks": [
+        {
+          "id": "ZP-201",
+          "title": "31-band EQ + bass/treble + preamp + bypass + loudness prototype",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Rust DSP tests plus listening and frequency sweeps"
+        },
+        {
+          "id": "ZP-202",
+          "title": "Move EQ coefficient design from callback into control worker",
+          "priority": "blocker",
+          "status": "implemented_unverified",
+          "verification": "Control-thread coefficient publication added; still needs cargo tests, frequency sweeps and Windows callback profiling"
+        },
+        {
+          "id": "ZP-203",
+          "title": "Complete editable 31-band GUI and 10-band compact preset view",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "All 31 EQ sliders, 8 factory/custom presets and persistence coded. Inverted gain UI: +12 top, 0 center, -12 bottom. Compact mode and listening test remain."
+        },
+        {
+          "id": "ZP-204",
+          "title": "Gain staging, ReplayGain, limiter and clipping meter",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Peak/response and clipping tests"
+        },
+        {
+          "id": "ZP-205",
+          "title": "User-defined DSP presets with import/export",
+          "priority": "medium",
+          "status": "in_progress",
+          "verification": "Custom EQ presets and last curve persist to backward-compatible session-v1.json; preset-specific standalone import/export and migration to schema-v2 pending."
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Library & playlists",
+      "status": "in_progress",
+      "goal": "Handle large music libraries without freezing UI or losing data",
+      "gate": "50k files, cancel/rescan, offline devices and persisted playlists tested",
+      "tasks": [
+        {
+          "id": "ZP-301",
+          "title": "Scanner subprocess, JSONL IPC and bounded UI batches",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows"
+        },
+        {
+          "id": "ZP-302",
+          "title": "Persist folders and playlists in SQLite with migrations",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Named playlists and 1-5 star ratings persist in backward-compatible session-v1.json; scrollable list implemented. SQLite indexes/migrations remain pending."
+        },
+        {
+          "id": "ZP-303",
+          "title": "Virtualized searchable library, sorting and metadata tags",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Filename query, 12-track page, order/name asc/desc/folder/stars sort, selectable 0-5 user ratings, stable queue mapping and scroll views implemented. Tags/SQLite and UI stress testing pending."
+        },
+        {
+          "id": "ZP-304",
+          "title": "M3U/M3U8 import/export and proper track queue selection",
+          "priority": "medium",
+          "status": "implemented_unverified",
+          "verification": "M3U/M3U8 import/export, named queue playlists and session persistence. Windows tests passed in CI; manual UI behavior on user's PC not yet confirmed."
+        },
+        {
+          "id": "ZP-305",
+          "title": "Cover art thumbnail cache, library watch and duplicate detection",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Filesystem changes and memory ceiling"
+        }
+      ]
+    },
+    {
+      "id": "P4",
+      "name": "Visualizers & themes",
+      "status": "in_progress",
+      "goal": "Accurate responsive effects that never stall audio",
+      "gate": "FFT driven by real PCM, 30/60 fps caps and rendering measurements",
+      "tasks": [
+        {
+          "id": "ZP-401",
+          "title": "Nonblocking PCM telemetry tap and FFT analysis worker",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Bounded PCM tap, separate RustFFT worker, Hann-2048 FFT, log 32-band atomics and 20 FPS Slint model committed; generated sine tests and Windows builds/perf/listening pending FFT bars now bottom-anchored to grow upward; UI build pending."
+        },
+        {
+          "id": "ZP-402",
+          "title": "Spectrum, oscilloscope, waveform, VU and peak-meter views",
+          "priority": "medium",
+          "status": "in_progress",
+          "verification": "Dynamic real spectrum bars and PCM peak meter implemented in source; oscilloscope, waveform, multichannel VU and hardware validation still pending"
+        },
+        {
+          "id": "ZP-403",
+          "title": "Custom skins, resizable panels, DPI and compact Winamp-like mode",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "125/150/200% DPI and keyboard tests"
+        },
+        {
+          "id": "ZP-404",
+          "title": "Throttle/freeze visualizer when minimized or battery-saving",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Idle CPU benchmark"
+        }
+      ]
+    },
+    {
+      "id": "P5",
+      "name": "Media downloader",
+      "status": "in_progress",
+      "goal": "Optional yt-dlp jobs isolated from playback",
+      "gate": "Authorized audio/video/playlist downloads, cancellation and error reporting verified",
+      "tasks": [
+        {
+          "id": "ZP-501",
+          "title": "yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Portable-relative tools, tools/yt-dlp, tools/ffmpeg/bin, WinGet Links and PATH executable detection plus explicit --ffmpeg-location implemented. No third-party binaries bundled pending license/hash review; Windows tests pending."
+        },
+        {
+          "id": "ZP-502",
+          "title": "URL analysis, playlist selection and safe format presets",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Dedicated bounded 35s yt-dlp --flat-playlist JSON analyzer, preview max 100, item selection, all/none controls and persisted --playlist-items added. Windows CI + source-specific integration pending; metadata only (no Google Music)."
+        },
+        {
+          "id": "ZP-503",
+          "title": "Bounded persisted job queue, retry/cancel and progress IPC",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Background single-worker queue, progress, cancel/retry, disk-persisted job history and crash interruption behavior coded. Rust/Windows compiler test and live network simulation pending."
+        },
+        {
+          "id": "ZP-504",
+          "title": "Postprocess audio, sanitize destinations and auto-import completed files",
+          "priority": "medium",
+          "status": "in_progress",
+          "verification": "FFmpeg postprocess through yt-dlp, destination control, output file reporting and audio library import coded; path stress and video library auto-import pending."
+        }
+      ]
+    },
+    {
+      "id": "P6",
+      "name": "Extension API",
+      "status": "planned",
+      "goal": "Optional plugins cannot crash music playback",
+      "gate": "Version mismatch/crashing plugin safely disabled without playback dropouts",
+      "tasks": [
+        {
+          "id": "ZP-601",
+          "title": "Versioned manifest and plugin capability schema",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Compatibility and invalid-manifest tests"
+        },
+        {
+          "id": "ZP-602",
+          "title": "Out-of-process metadata/downloader plugin host with restricted IPC",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Crash/timeouts/security tests"
+        },
+        {
+          "id": "ZP-603",
+          "title": "DSP effect plugin feasibility ADR (CLAP/VST if justified)",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Real-time safety and license review"
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "name": "Release & distribution",
+      "status": "in_progress",
+      "goal": "Small, reliable installable Windows product",
+      "gate": "Signed installer/portable build and release smoke tests on supported Windows versions",
+      "tasks": [
+        {
+          "id": "ZP-701",
+          "title": "Windows clean install/upgrade/uninstall/portable packaging",
+          "priority": "high",
+          "status": "in_progress",
+          "verification": "Windows release CI with portable ZIP and SHA256 exists. New media key, playlist scroll, stars, sorting and fast EQ pan compiled/tested in CI; Win10/11 manual testing, installer and signing pending."
+        },
+        {
+          "id": "ZP-702",
+          "title": "Crash diagnostics, privacy-safe logging and repair tools",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Failure injection and recovery"
+        },
+        {
+          "id": "ZP-703",
+          "title": "8-hour audio soak with scanning/EQ/downloads and user acceptance",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "CPU/RAM/underruns and crash report"
+        },
+        {
+          "id": "ZP-704",
+          "title": "Signed public alpha/beta and licenses/third-party notices",
+          "priority": "blocker",
+          "status": "todo",
+          "verification": "Release artifact/signature/checksum verification"
+        }
+      ]
+    },
+    {
+      "id": "P8",
+      "name": "Studio & MIDI practice",
+      "status": "in_progress",
+      "goal": "Practical piano, metronome and multichannel sound training isolated from the music player",
+      "gate": "Audible notes, responsive polyphony/mixer, 20-minute metronome test and hardware MIDI keyboard input on Windows",
+      "tasks": [
+        {
+          "id": "ZP-801",
+          "title": "Two-octave virtual MIDI keyboard and four-timbre polyphonic Rust synthesizer",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Slint keyboard and detached Rodio stream with four procedural note profiles coded. Windows compile and audible hardware tests pending."
+        },
+        {
+          "id": "ZP-802",
+          "title": "Live 4-channel gain/pan/mute mixer and master fader",
+          "priority": "high",
+          "status": "implemented_unverified",
+          "verification": "Four atomic channel states, live per-voice faders/pan/mute and master control coded. Stress/CPU and user listening tests pending."
+        },
+        {
+          "id": "ZP-803",
+          "title": "Scale practice C-major feedback and tempo metronome",
+          "priority": "medium",
+          "status": "implemented_unverified",
+          "verification": "C4 through C5 exercise with hit scoring, reset and adjustable 40–240 BPM synthesizer click coded; practice and drift verification pending."
+        },
+        {
+          "id": "ZP-804",
+          "title": "Physical USB MIDI keyboard device discovery and Note On/Off input",
+          "priority": "high",
+          "status": "todo",
+          "verification": "Connect/disconnect keyboard; prove latency and velocity with device hotplug and without blocking music playback."
+        },
+        {
+          "id": "ZP-805",
+          "title": "Piano roll sequencer, MIDI export and recording",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Record timestamped notes, snap to grid, edit patterns and export standards-compliant .mid without audio-thread allocation."
+        },
+        {
+          "id": "ZP-806",
+          "title": "Studio audio coexistence, latency controls and session persistence",
+          "priority": "medium",
+          "status": "todo",
+          "verification": "Physical WASAPI concurrent music+synth testing, routing, controller settings and crash-safe studio state persistence."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1012 @@
+
+import { Button, Slider, LineEdit, ScrollView } from "std-widgets.slint";
+
+component NavigationItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> selected;
+    callback activated;
+    height: 47px;
+    background: selected ? #173c77 : #0b182b;
+    border-radius: 9px;
+    Text {
+        text: root.label;
+        color: root.selected ? #ffffff : #c2d5ee;
+        font-size: 17px;
+        x: 18px;
+        height: parent.height;
+        vertical-alignment: center;
+    }
+    TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
+component TrackLine inherits Rectangle {
+    in property <string> number;
+    in property <string> title;
+    in property <string> artist;
+    callback activated;
+    height: 43px;
+    background: #102039;
+    border-radius: 6px;
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 9px;
+        Text { text: root.number; width: 22px; color: #3faaff; vertical-alignment: center; }
+        VerticalLayout {
+            spacing: 1px;
+            Text { text: root.title; font-size: 13px; color: #f1f6ff; }
+            Text { text: root.artist; font-size: 11px; color: #8ea6c9; }
+        }
+    }
+    TouchArea { clicked => { root.activated(); } }
+}
+
+export component AppWindow inherits Window {
+    title: "ZillaPlayer — Windows Alpha 0.4";
+    width: 1510px;
+    height: 920px;
+    background: #07101e;
+
+    in-out property <string> active-page: "Player";
+    in-out property <int> studio-instrument: 0;
+    in-out property <int> studio-last-note: -1;
+    in-out property <int> studio-bpm: 100;
+    in-out property <bool> studio-click-on: false;
+    in-out property <string> studio-target: "C4";
+    in-out property <string> studio-feedback: "Натисніть C4, щоб почати";
+    in-out property <string> studio-score: "0 / 0";
+    in property <[string]> studio-note-labels: [];
+    in property <[bool]> studio-mutes: [];
+    in property <[float]> studio-gains: [];
+    in property <[float]> studio-pans: [];
+    callback studio-note(int);
+    callback studio-set-gain(int,float);
+    callback studio-set-pan(int,float);
+    callback studio-toggle-mute(int);
+    callback studio-set-master(float);
+    callback studio-set-bpm(int);
+    callback studio-toggle-click(bool);
+    callback studio-reset-practice;
+    in-out property <bool> uk: true;
+    in-out property <string> library-query: "";
+    in-out property <string> new-playlist-name: "";
+    in-out property <string> custom-preset-name: "";
+    in-out property <string> active-playlist-name: "";
+    in-out property <string> library-page-info: "";
+    in-out property <[float]> eq-bands: [];
+    in-out property <float> eq-preamp: -6;
+    in property <[string]> preset-names: [];
+    in property <[string]> playlist-names: [];
+    callback apply-eq-preset(int);
+    callback save-eq-preset(string);
+    callback search-library(string);
+    callback library-page(int);
+    callback create-playlist(string);
+    callback load-playlist(int);
+    callback save-active-playlist;
+    callback delete-active-playlist;
+    in-out property <string> download-url: "";
+    in-out property <int> download-profile: 0;
+    in-out property <bool> download-playlist: false;
+    in-out property <string> download-folder: "";
+    in-out property <string> download-tool-status: "Перевірка інструментів...";
+    in-out property <string> download-status: "Лише дозволені для завантаження матеріали";
+    in property <[string]> download-job-rows: [];
+    callback choose-download-folder;
+    callback enqueue-download;
+    callback cancel-download(int);
+    callback retry-download(int);
+    callback check-download-tools;
+    callback clear-download-history;
+    in-out property <string> download-preview-status: "";
+    in property <[string]> download-preview-rows: [];
+    callback analyze-download;
+    callback toggle-download-preview(int);
+    callback select-download-preview(bool);
+    callback open-download-help;
+    callback invalidate-download-preview;
+    in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
+    in-out property <string> track-title: "Трек не вибрано";
+    in-out property <bool> playing: false;
+    in-out property <bool> has-track: false;
+    in-out property <float> progress-percent: 0;
+    in-out property <float> volume-percent: 80;
+    in-out property <string> elapsed-text: "00:00";
+    in-out property <string> duration-text: "--:--";
+    in-out property <float> audio-level: 0;
+    in property <[float]> spectrum-bars: [];
+    callback open-file;
+    callback toggle-play;
+    callback stop-playback;
+    callback seek-to(float);
+    callback set-volume(float);
+    callback open-folder;
+    callback import-playlist;
+    callback export-playlist;
+    callback play-library-track(int);
+    callback previous-track;
+    callback next-track;
+    callback set-eq-band(int, float);
+    callback set-preamp(float);
+    callback set-bass(float);
+    callback set-treble(float);
+    callback set-loudness(bool);
+    callback enable-eq(bool);
+    in-out property <[string]> library-items: [];
+    in property <[string]> library-ratings: [];
+    callback sort-library(int);
+    callback rate-library-track(int);
+    in-out property <string> library-count: "0 треків";
+    in property <[string]> roadmap-items: [];
+    in property <[string]> focus-tasks: [];
+    in property <string> roadmap-summary: "Loading roadmap...";
+    in property <string> task-summary: "Loading tasks...";
+    in property <string> next-gate: "Windows build verification pending";
+    in-out property <bool> equalizer-enabled: true;
+    in-out property <bool> loudness-enabled: false;
+
+    HorizontalLayout {
+        spacing: 0px;
+        Rectangle {
+            width: 220px;
+            background: #0b1525;
+            VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+                Rectangle {
+                    height: 78px;
+                    background: #0b1525;
+                    VerticalLayout {
+                        spacing: 3px;
+                        Text { text: "Z  ZillaPlayer"; color: #d5e9ff; font-size: 27px; font-weight: 700; }
+                        Text { text: "RUST  /  WINDOWS  /  P0"; color: #36a8ff; font-size: 10px; }
+                    }
+                }
+                NavigationItem { label: root.uk ? "▶   Плеєр" : "▶   Player"; selected: root.active-page == "Player"; activated => { root.active-page = "Player"; } }
+                NavigationItem { label: root.uk ? "♫   Бібліотека" : "♫   Library"; selected: root.active-page == "Library"; activated => { root.active-page = "Library"; } }
+                NavigationItem { label: root.uk ? "♬   Студія" : "♬   Studio"; selected: root.active-page == "Studio"; activated => { root.active-page = "Studio"; } }
+                NavigationItem { label: root.uk ? "↓   Завантаження" : "↓   Downloads"; selected: root.active-page == "Downloads"; activated => { root.active-page = "Downloads"; } }
+                NavigationItem { label: root.uk ? "☑   Задачі" : "☑   Tasks"; selected: root.active-page == "Tasks"; activated => { root.active-page = "Tasks"; } }
+                NavigationItem { label: root.uk ? "◇   Плани" : "◇   Plans"; selected: root.active-page == "Plans"; activated => { root.active-page = "Plans"; } }
+                NavigationItem { label: root.uk ? "⚙   Налаштування" : "⚙   Settings"; selected: root.active-page == "Settings"; activated => { root.active-page = "Settings"; } }
+                Rectangle { vertical-stretch: 1; background: #0b1525; }
+                Rectangle {
+                    height: 170px;
+                    border-radius: 10px;
+                    background: #102e58;
+                    VerticalLayout {
+                        padding: 16px;
+                        spacing: 6px;
+                        Rectangle { height: 45px; background: #143f7a; border-radius: 10px; }
+                        Text { text: "MUSIC"; color: #35a4ff; font-size: 16px; }
+                        Text { text: "HIGHER  /  FURTHER"; color: #cbdfff; font-size: 12px; }
+                        Text { text: "TOGETHER"; color: #8ccaff; font-size: 15px; }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            background: #080f1c;
+            HorizontalLayout {
+                spacing: 0px;
+                Rectangle {
+                    background: #080f1c;
+                    HorizontalLayout {
+                        spacing: 0px;
+                        Rectangle {
+                            background: #080f1c;
+                            VerticalLayout {
+                                padding: 13px;
+                                spacing: 13px;
+                                Rectangle {
+                                    height: 56px;
+                                    background: #101e32;
+                                    border-radius: 10px;
+                                    HorizontalLayout {
+                                        padding-left: 18px;
+                                        padding-right: 14px;
+                                        spacing: 16px;
+                                        LineEdit {
+                                            horizontal-stretch: 1;
+                                            placeholder-text: root.uk ? "Пошук музики..." : "Search music...";
+                                            text <=> root.library-query;
+                                            edited(text) => { root.search-library(text); }
+                                        }
+                                        Button { text: root.uk ? "Бібліотека" : "Library"; clicked => { root.active-page = "Library"; root.search-library(root.library-query); } }
+                                        Button { text: root.uk ? "EN" : "UA"; clicked => { root.uk = !root.uk; } }
+                                        Text { text: "♫  Windows Audio"; color: #43caff; vertical-alignment: center; font-size: 14px; }
+                                        Text { text: "●"; color: #00cfb7; vertical-alignment: center; font-size: 18px; }
+                                    }
+                                }
+                                if root.active-page == "Player" : VerticalLayout {
+                                    spacing: 12px;
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Rectangle {
+                                            width: 246px;
+                                            height: 242px;
+                                            background: #152e5b;
+                                            border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 20px;
+                                                spacing: 10px;
+                                                Text { text: "ASTRAL"; font-size: 25px; font-weight: 700; color: #e6faff; }
+                                                Text { text: "HORIZONS"; font-size: 18px; color: #9ecbff; }
+                                                Rectangle { background: #214d9b; vertical-stretch: 1; border-radius: 10px; }
+                                                Text { text: "SOLARIS DRIVE"; color: #9ebbd6; font-size: 12px; }
+                                            }
+                                        }
+                                        Rectangle {
+                                            height: 242px;
+                                            background: #102039;
+                                            border-radius: 12px;
+                                            horizontal-stretch: 1;
+                                            VerticalLayout {
+                                                padding: 18px;
+                                                spacing: 12px;
+                                                Text { text: root.uk ? "ЛОКАЛЬНЕ АУДІО · WINDOWS" : "LOCAL AUDIO · WINDOWS"; color: #40baff; font-size: 12px; }
+                                                Text { text: root.track-title; color: #ffffff; font-size: 29px; font-weight: 700; overflow: elide; }
+                                                Text { text: root.uk ? "МУЗИКА З ДИСКА" : "LOCAL MEDIA · file opened from disk"; color: #a8c6e8; font-size: 16px; }
+                                                HorizontalLayout {
+                                                    spacing: 8px;
+                                                    Button { text: root.uk ? "Файл" : "Open File"; clicked => { root.open-file(); } }
+                                                    Button { text: root.uk ? "Папка" : "Folder"; clicked => { root.open-folder(); } }
+                                                    Button { text: root.playing ? (root.uk ? "❚❚ Пауза" : "❚❚ Pause") : (root.uk ? "▶ Грати" : "▶ Play"); enabled: root.has-track; clicked => { root.toggle-play(); } }
+                                                    Button { text: root.uk ? "■ Стоп" : "■ Stop"; enabled: root.has-track; clicked => { root.stop-playback(); } }
+                                                    Button { text: "◀"; clicked => { root.previous-track(); } }
+                                                    Button { text: "▶"; clicked => { root.next-track(); } }
+                                                    Rectangle { horizontal-stretch: 1; background: #102039; }
+                                                }
+                                                Slider {
+                                                    minimum: 0;
+                                                    maximum: 100;
+                                                    value: root.progress-percent;
+                                                    enabled: root.has-track;
+                                                    released(percent) => { root.seek-to(percent); }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 9px;
+                                                    Text { text: root.elapsed-text + " / " + root.duration-text; color: #8daaca; }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                    Text { text: "RODIO  /  CPAL  /  SYMPHONIA"; color: #4fc0ff; font-size: 12px; }
+                                                }
+                                            }
+                                        }
+                                        Rectangle {
+                                            width: 284px;
+                                            height: 242px;
+                                            background: #102039;
+                                            border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px;
+                                                spacing: 7px;
+                                                Text { text: (root.uk ? "ЧЕРГА / " : "PLAYLIST / ") + root.library-count; color: #f2f7ff; font-size: 15px; font-weight: 700; }
+                                                ScrollView {
+                                                    vertical-stretch: 1;
+                                                    content-height: root.library-items.length * 47px;
+                                                    vertical-scrollbar-policy: as-needed;
+                                                    horizontal-scrollbar-policy: always-off;
+                                                    VerticalLayout {
+                                                        spacing: 4px;
+                                                        for file[i] in root.library-items : TrackLine {
+                                                            number: "♫"; title: file;
+                                                            artist: root.uk ? "Локальне аудіо" : "Local audio";
+                                                            activated => { root.play-library-track(i); }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 188px;
+                                        background: #0e203c;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px;
+                                            spacing: 10px;
+                                            HorizontalLayout {
+                                                Text { text: root.uk ? "ЖИВИЙ СПЕКТР · 32 СМУГИ" : "LIVE FFT SPECTRUM · 32 BANDS"; color: #d7ecff; font-size: 14px; }
+                                                Rectangle { horizontal-stretch: 1; }
+                                                Text { text: "RustFFT  /  20 FPS UI  /  isolated worker"; color: #55aaff; font-size: 12px; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 5px;
+                                                alignment: center;
+                                                // Bottom-anchor each band: the spectrum grows UP
+                                                // instead of hanging downward from the top.
+                                                for bar in root.spectrum-bars : Rectangle {
+                                                    width: 11px;
+                                                    height: 107px;
+                                                    background: transparent;
+                                                    Rectangle {
+                                                        width: parent.width;
+                                                        height: 3px + bar * 1px;
+                                                        y: parent.height - self.height;
+                                                        background: bar > 70 ? #28d9ff : #356aff;
+                                                        border-radius: 3px;
+                                                    }
+                                                }
+                                            }
+                                            HorizontalLayout {
+                                                height: 16px;
+                                                spacing: 10px;
+                                                Text { text: root.uk ? "РІВЕНЬ" : "LIVE PEAK"; width: 82px; font-size: 12px; color: #5dcaff; }
+                                                Rectangle {
+                                                    height: 11px;
+                                                    horizontal-stretch: 1;
+                                                    background: #1e3656;
+                                                    border-radius: 5px;
+                                                    Rectangle {
+                                                        width: parent.width * root.audio-level / 100;
+                                                        height: parent.height;
+                                                        background: #27c8ff;
+                                                        border-radius: 5px;
+                                                    }
+                                                }
+                                                Text { text: "PCM"; width: 32px; color: #8dadcb; font-size: 11px; }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 312px;
+                                        background: #102039;
+                                        border-radius: 12px;
+                                        HorizontalLayout {
+                                            padding: 14px;
+                                            spacing: 15px;
+                                            VerticalLayout {
+                                                horizontal-stretch: 1;
+                                                spacing: 8px;
+                                                HorizontalLayout {
+                                                    Text { text: root.uk ? "ЕКВАЛАЙЗЕР / 31 СМУГА" : "GRAPHIC EQ / 31 BANDS"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Rectangle { horizontal-stretch: 1; }
+                                                    Text { text: root.uk ? "ПРЕСЕТИ ТА КЕРУВАННЯ" : "PRESETS & LIVE DSP"; color: #59beff; font-size: 12px; }
+                                                    Button { text: "◀◀"; clicked => { eq-scroll.content-x = min(0px,eq-scroll.content-x + 380px); } }
+                                                    Button { text: "▶▶"; clicked => { eq-scroll.content-x = max(eq-scroll.visible-width - eq-scroll.content-width,eq-scroll.content-x - 380px); } }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 5px;
+                                                    ScrollView {
+                                                        height: 40px;
+                                                        horizontal-stretch: 1;
+                                                        content-width: 1600px;
+                                                        content-height: 34px;
+                                                        horizontal-scrollbar-policy: as-needed;
+                                                        vertical-scrollbar-policy: always-off;
+                                                        HorizontalLayout {
+                                                            spacing: 6px;
+                                                            for preset[i] in root.preset-names : Button {
+                                                                text: preset;
+                                                                clicked => { root.apply-eq-preset(i); }
+                                                            }
+                                                        }
+                                                    }
+                                                    LineEdit {
+                                                        width: 132px;
+                                                        placeholder-text: root.uk ? "Назва пресету" : "Preset name";
+                                                        text <=> root.custom-preset-name;
+                                                    }
+                                                    Button { text: root.uk ? "Зберегти" : "Save"; clicked => { root.save-eq-preset(root.custom-preset-name); } }
+                                                }
+                                                eq-scroll := ScrollView {
+                                                    height: 154px;
+                                                    horizontal-stretch: 1;
+                                                    mouse-drag-pan-enabled: true;
+                                                    content-width: 1250px;
+                                                    content-height: 153px;
+                                                    horizontal-scrollbar-policy: as-needed;
+                                                    vertical-scrollbar-policy: always-off;
+                                                    HorizontalLayout {
+                                                        spacing: 5px;
+                                                        alignment: start;
+                                                        VerticalLayout {
+                                                            width: 39px;
+                                                            spacing: 0px;
+                                                            Text { text: "+12"; height: 30px; font-size: 11px; color: #61cdf8; }
+                                                            Text { text: "0 dB"; height: 47px; font-size: 11px; color: #d6e8fc; }
+                                                            Text { text: "-12"; height: 35px; font-size: 11px; color: #61cdf8; }
+                                                        }
+                                                        for hz[i] in ["20","25","31","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k","20k"] : VerticalLayout {
+                                                            width: 30px;
+                                                            spacing: 3px;
+                                                            Slider {
+                                                                orientation: vertical;
+                                                                minimum: 0;
+                                                                maximum: 24;
+                                                                // Slint's vertical Slider grows downwards. Invert
+                                                                // only its UI coordinate, NOT the DSP gain.
+                                                                value: 12 - root.eq-bands[i];
+                                                                height: 110px;
+                                                                changed(v) => { root.set-eq-band(i,12 - v); }
+                                                            }
+                                                            Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
+                                                            Text { text: root.eq-bands[i] + " dB"; color: #77cdfa; horizontal-alignment: center; font-size: 9px; }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            Rectangle { width: 1px; background: #284362; }
+                                            VerticalLayout {
+                                                width: 190px;
+                                                spacing: 10px;
+                                                Text { text: root.uk ? "КЕРУВАННЯ ЗВУКОМ" : "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
+                                                Text { text: root.uk ? "Попереднє підсилення" : "Preamp / Headroom"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -18; maximum: 6; value: root.eq-preamp; changed(v) => { root.set-preamp(v); } }
+                                                Text { text: root.uk ? "Гучність" : "Master Volume"; color: #9ab7d5; font-size: 12px; }
+                                                Slider {
+                                                    minimum: 0;
+                                                    maximum: 100;
+                                                    value: root.volume-percent;
+                                                    changed(percent) => { root.set-volume(percent); }
+                                                }
+                                                Text { text: root.uk ? "Бас" : "Bass"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-bass(v); } }
+                                                Text { text: root.uk ? "Високі / Тембр" : "Treble / Tone"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-treble(v); } }
+                                                Button { text: root.loudness-enabled ? (root.uk ? "Лауднес: ТАК" : "Loud: ON") : (root.uk ? "Лауднес: НІ" : "Loud: OFF"); clicked => {
+                                                    root.loudness-enabled = !root.loudness-enabled;
+                                                    root.set-loudness(root.loudness-enabled);
+                                                } }
+                                                Button { text: root.equalizer-enabled ? (root.uk ? "EQ: ТАК" : "EQ: ON") : (root.uk ? "EQ: ОБХІД" : "EQ: BYPASS"); clicked => {
+                                                    root.equalizer-enabled = !root.equalizer-enabled;
+                                                    root.enable-eq(root.equalizer-enabled);
+                                                } }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Downloads" : VerticalLayout {
+                                    spacing: 12px;
+                                    Text {
+                                        text: root.uk ? "Менеджер завантажень" : "Download Manager";
+                                        color: #f4f8ff;
+                                        font-size: 30px;
+                                        font-weight: 700;
+                                    }
+                                    Text {
+                                        text: root.uk
+                                            ? "yt-dlp + FFmpeg · MP3 · відео 1440p · плейлисти · окремий фоновий процес"
+                                            : "yt-dlp + FFmpeg · MP3 · 1440p video · playlists · isolated worker";
+                                        color: #9ab4d2;
+                                        font-size: 14px;
+                                    }
+                                    Rectangle {
+                                        height: 216px;
+                                        background: #12243e;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 13px;
+                                            spacing: 9px;
+                                            HorizontalLayout {
+                                                spacing: 9px;
+                                                LineEdit {
+                                                    horizontal-stretch: 1;
+                                                    placeholder-text: root.uk
+                                                        ? "Вставте посилання на дозволене відео або плейлист..."
+                                                        : "Paste an authorized media or playlist URL...";
+                                                    text <=> root.download-url;
+                                                    edited(text) => { root.invalidate-download-preview(); }
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Аналіз" : "Analyze";
+                                                    clicked => { root.analyze-download(); }
+                                                }
+                                                Button {
+                                                    text: root.uk ? "+ До черги" : "+ Queue";
+                                                    clicked => { root.enqueue-download(); }
+                                                }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 6px;
+                                                for profile[i] in ["MP3 320k","Аудіо ориг.","1440p / MKV","1080p / MKV","Best / MKV"] : Button {
+                                                    text: profile;
+                                                    clicked => { root.download-profile = i; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #12243e; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 11px;
+                                                Text {
+                                                    text: (root.uk ? "Обрано: " : "Selected: ") +
+                                                        (root.download-profile == 0 ? "MP3 320k" :
+                                                         root.download-profile == 1 ? "Original Audio" :
+                                                         root.download-profile == 2 ? "1440p MKV" :
+                                                         root.download-profile == 3 ? "1080p MKV" : "Best MKV");
+                                                    color: #43caff; font-size: 14px;
+                                                    vertical-alignment: center;
+                                                }
+                                                Button {
+                                                    text: root.download-playlist
+                                                        ? (root.uk ? "☑ Увесь плейлист (до 200)" : "☑ Playlist (max 200)")
+                                                        : (root.uk ? "☐ Одне відео" : "☐ Single video");
+                                                    clicked => {
+                                                        root.download-playlist = !root.download-playlist;
+                                                        root.invalidate-download-preview();
+                                                    }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #12243e; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 8px;
+                                                Text {
+                                                    text: root.uk ? "Папка:" : "Save to:";
+                                                    color: #bdd8f2; vertical-alignment: center;
+                                                }
+                                                Text {
+                                                    text: root.download-folder;
+                                                    color: #7ad2ff;
+                                                    horizontal-stretch: 1;
+                                                    font-size: 13px;
+                                                    vertical-alignment: center;
+                                                    overflow: elide;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Огляд..." : "Browse...";
+                                                    clicked => { root.choose-download-folder(); }
+                                                }
+                                            }
+                                            Text {
+                                                text: root.uk
+                                                    ? "Завантажуйте лише власні або дозволені матеріали. 1440p — це QHD; наявність якості залежить від джерела."
+                                                    : "Download only media you own or have permission to save. 1440p is QHD; source quality varies.";
+                                                color: #91a9c7;
+                                                font-size: 12px;
+                                            }
+                                        }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 9px;
+                                        Text {
+                                            text: root.download-tool-status;
+                                            horizontal-stretch: 1;
+                                            color: #81cfff;
+                                            vertical-alignment: center;
+                                            font-size: 14px;
+                                        }
+                                        Button {
+                                            text: root.uk ? "Як встановити?" : "Setup guide";
+                                            clicked => { root.open-download-help(); }
+                                        }
+                                        Button {
+                                            text: root.uk ? "Перевірити yt-dlp / FFmpeg" : "Check yt-dlp / FFmpeg";
+                                            clicked => { root.check-download-tools(); }
+                                        }
+                                    }
+                                    Text {
+                                        text: root.download-status;
+                                        color: #d6ecff;
+                                        font-size: 14px;
+                                        max-height: 32px;
+                                        overflow: elide;
+                                    }
+                                    if root.download-preview-rows.length > 0 : Rectangle {
+                                        height: 155px;
+                                        background: #12243e;
+                                        border-radius: 10px;
+                                        VerticalLayout {
+                                            padding: 9px;
+                                            spacing: 5px;
+                                            HorizontalLayout {
+                                                spacing: 7px;
+                                                Text {
+                                                    text: root.download-preview-status;
+                                                    color: #64cdff;
+                                                    font-size: 13px;
+                                                    horizontal-stretch: 1;
+                                                    vertical-alignment: center;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Усі" : "All";
+                                                    clicked => { root.select-download-preview(true); }
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Жодного" : "None";
+                                                    clicked => { root.select-download-preview(false); }
+                                                }
+                                            }
+                                            ScrollView {
+                                                vertical-stretch: 1;
+                                                content-height: root.download-preview-rows.length * 35px;
+                                                vertical-scrollbar-policy: as-needed;
+                                                horizontal-scrollbar-policy: always-off;
+                                                VerticalLayout {
+                                                    spacing: 2px;
+                                                    for item[i] in root.download-preview-rows : Button {
+                                                        text: item;
+                                                        clicked => { root.toggle-download-preview(i); }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        background: #101f35;
+                                        vertical-stretch: 1;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 12px;
+                                            spacing: 10px;
+                                            HorizontalLayout {
+                                                Text {
+                                                    text: root.uk ? "ЧЕРГА ЗАВАНТАЖЕНЬ" : "DOWNLOAD QUEUE";
+                                                    color: #eaf4ff; font-size: 18px; font-weight: 700;
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: #101f35; }
+                                                Text {
+                                                    text: "" + root.download-job-rows.length + (root.uk ? " завдань" : " jobs");
+                                                    color: #70c9ff; font-size: 13px;
+                                                }
+                                                Button {
+                                                    text: root.uk ? "Очистити завершені" : "Clear finished";
+                                                    clicked => { root.clear-download-history(); }
+                                                }
+                                            }
+                                            Rectangle { height: 1px; background: #294361; }
+                                            ScrollView {
+                                                vertical-stretch: 1;
+                                                horizontal-stretch: 1;
+                                                content-height: root.download-job-rows.length * 58px;
+                                                vertical-scrollbar-policy: as-needed;
+                                                horizontal-scrollbar-policy: always-off;
+                                                VerticalLayout {
+                                                    spacing: 5px;
+                                                    for job[i] in root.download-job-rows : Rectangle {
+                                                        height: 52px;
+                                                        background: #172b47;
+                                                        border-radius: 7px;
+                                                        HorizontalLayout {
+                                                            padding: 6px;
+                                                            spacing: 8px;
+                                                            Text {
+                                                                text: job;
+                                                                color: #d7eaff;
+                                                                font-size: 12px;
+                                                                horizontal-stretch: 1;
+                                                                vertical-alignment: center;
+                                                                overflow: elide;
+                                                            }
+                                                            Button {
+                                                                text: root.uk ? "Скасувати" : "Cancel";
+                                                                clicked => { root.cancel-download(i); }
+                                                            }
+                                                            Button {
+                                                                text: root.uk ? "Повтор" : "Retry";
+                                                                clicked => { root.retry-download(i); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Tasks" : VerticalLayout {
+                                    spacing: 14px;
+                                    Text { text: (root.uk ? "Задачі розробки" : "Engineering Tasks"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: "Read-only engineering backlog · bundled roadmap/roadmap.json"; color: #9ab4d2; font-size: 15px; }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        for stat in [root.task-summary, root.roadmap-summary, root.next-gate] : Rectangle {
+                                            background: #142641;
+                                            border-radius: 10px;
+                                            height: 91px;
+                                            horizontal-stretch: 1;
+                                            Text { text: stat; x: 18px; height: parent.height; color: #d8eafb; vertical-alignment: center; font-size: 17px; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        background: #101f35;
+                                        vertical-stretch: 1;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 18px;
+                                            spacing: 18px;
+                                            Text { text: "BACKLOG                     MODULE                         STATUS"; color: #7ca9d7; font-size: 15px; }
+                                            Rectangle { height: 1px; background: #294361; }
+                                            for task in root.focus-tasks : Rectangle {
+                                                height: 49px;
+                                                background: #132945;
+                                                border-radius: 7px;
+                                                Text { text: task; x: 12px; color: #d3eaff; height: parent.height; width: parent.width - 24px; vertical-alignment: center; font-size: 14px; overflow: elide; }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Plans" : VerticalLayout {
+                                    spacing: 14px;
+                                    Text { text: (root.uk ? "План розробки" : "Product Roadmap"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: root.roadmap-summary + " · no fabricated progress percentages"; color: #99b6d8; font-size: 16px; }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        for stat in [root.roadmap-summary, root.task-summary, root.next-gate] : Rectangle {
+                                            height: 90px;
+                                            background: #152744;
+                                            border-radius: 11px;
+                                            horizontal-stretch: 1;
+                                            Text { text: stat; color: #dcecff; height: parent.height; x: 13px; width: parent.width - 26px; font-size: 14px; vertical-alignment: center; wrap: word-wrap; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1;
+                                        background: #102039;
+                                        border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 17px;
+                                            spacing: 16px;
+                                            Text { text: "ROADMAP P0–P7     ·     status from repository source"; color: #4ab9ff; font-size: 16px; }
+                                            for plan in root.roadmap-items : Rectangle {
+                                                height: 54px;
+                                                background: #162c4b;
+                                                border-radius: 8px;
+                                                HorizontalLayout {
+                                                    padding-left: 17px;
+                                                    padding-right: 17px;
+                                                    Text { text: plan; color: #e5f4ff; vertical-alignment: center; horizontal-stretch: 1; font-size: 16px; overflow: elide; }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Studio" : VerticalLayout {
+                                    spacing: 12px;
+                                    HorizontalLayout {
+                                        Text {
+                                            text: root.uk ? "Zilla Studio · MIDI-тренажер" : "Zilla Studio · MIDI Practice";
+                                            color: #f4f8ff; font-size: 30px; font-weight: 700;
+                                        }
+                                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                                        Text {
+                                            text: root.uk ? "СИНТЕЗАТОР RUST · 4 КАНАЛИ" : "RUST SYNTH · 4 CHANNELS";
+                                            color: #48bfff; font-size: 13px; vertical-alignment: center;
+                                        }
+                                    }
+                                    Text {
+                                        text: root.uk
+                                            ? "Грайте ноти, налаштовуйте мікшер і тренуйте гамму до мажор. Це тренувальна студія, не повноцінна DAW."
+                                            : "Play notes, adjust a live mixer and practice the C major scale. This is a trainer, not a full DAW.";
+                                        color: #9db9d7; font-size: 15px;
+                                    }
+                                    Rectangle {
+                                        height: 260px; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 15px; spacing: 12px;
+                                            HorizontalLayout {
+                                                spacing: 10px;
+                                                Text { text: root.uk ? "ІНСТРУМЕНТ" : "INSTRUMENT"; color: #8fcef9; font-size: 14px; vertical-alignment: center; }
+                                                for name[i] in ["Piano", "Bass", "Lead", "Pad"] : Button {
+                                                    text: (root.studio-instrument == i ? "● " : "○ ") + name;
+                                                    clicked => { root.studio-instrument = i; }
+                                                }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Text {
+                                                    text: root.uk ? "Остання нота: " + (root.studio-last-note < 0 ? "—" : root.studio-note-labels[root.studio-last-note - 60])
+                                                       : "Last note: " + (root.studio-last-note < 0 ? "—" : root.studio-note-labels[root.studio-last-note - 60]);
+                                                    color: #4fcaff; font-size: 13px; vertical-alignment: center;
+                                                }
+                                            }
+                                            ScrollView {
+                                                horizontal-stretch: 1;
+                                                vertical-stretch: 1;
+                                                content-width: 1110px;
+                                                content-height: 173px;
+                                                horizontal-scrollbar-policy: as-needed;
+                                                vertical-scrollbar-policy: always-off;
+                                                HorizontalLayout {
+                                                    spacing: 2px;
+                                                    for pitch[i] in [60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83] : Rectangle {
+                                                        width: 44px;
+                                                        height: (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                                 Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? 117px : 162px;
+                                                        background: root.studio-last-note == pitch ? #4dcfff :
+                                                            (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                             Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? #182537 : #e2edf9;
+                                                        border-radius: 6px;
+                                                        VerticalLayout {
+                                                            padding: 4px;
+                                                            spacing: 4px;
+                                                            Rectangle { vertical-stretch: 1; background: transparent; }
+                                                            Text {
+                                                                text: root.studio-note-labels[i];
+                                                                color: (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                                        Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? #9dd7ff : #19304e;
+                                                                horizontal-alignment: center;
+                                                                font-size: 12px;
+                                                                font-weight: 700;
+                                                            }
+                                                        }
+                                                        TouchArea { clicked => { root.studio-note(pitch); } }
+                                                    }
+                                                }
+                                            }
+                                            Text { text: root.uk ? "2 октави · C4–B5 · поліфонія · чотири тембри" : "2 octaves · C4–B5 · polyphony · four timbres"; color: #7eb6da; font-size: 12px; }
+                                        }
+                                    }
+                                    Rectangle {
+                                        height: 257px; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px; spacing: 9px;
+                                            HorizontalLayout {
+                                                spacing: 12px;
+                                                Text { text: root.uk ? "МІКШЕР" : "MIXER"; color: #e8f5ff; font-size: 17px; font-weight: 700; vertical-alignment: center; }
+                                                Text { text: root.uk ? "Майстер" : "Master"; color: #8eafd4; font-size: 13px; vertical-alignment: center; }
+                                                Slider {
+                                                    minimum: 0; maximum: 100; value: 65;
+                                                    horizontal-stretch: 1;
+                                                    changed(v) => { root.studio-set-master(v); }
+                                                }
+                                                Text { text: root.uk ? "Живе керування / панорама" : "Live gain / pan"; color: #8eafd4; font-size: 12px; vertical-alignment: center; }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 9px;
+                                                for name[i] in ["PIANO","BASS","LEAD","PAD"] : Rectangle {
+                                                    horizontal-stretch: 1; background: #172b47; border-radius: 8px;
+                                                    VerticalLayout {
+                                                        padding: 10px; spacing: 8px;
+                                                        HorizontalLayout {
+                                                            Text { text: name; color: #bfe6ff; font-size: 15px; font-weight: 700; }
+                                                            Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                            Button {
+                                                                text: root.studio-mutes[i] ? "MUTED" : "MUTE";
+                                                                clicked => { root.studio-toggle-mute(i); }
+                                                            }
+                                                        }
+                                                        Text { text: root.uk ? "Рівень" : "Level"; color: #8dadcf; font-size: 12px; }
+                                                        Slider { minimum: 0; maximum: 100; value: root.studio-gains[i]; changed(v) => { root.studio-set-gain(i,v); } }
+                                                        Text { text: root.uk ? "Панорама  L — R" : "Pan  L — R"; color: #8dadcf; font-size: 12px; }
+                                                        Slider { minimum: -100; maximum: 100; value: root.studio-pans[i]; changed(v) => { root.studio-set-pan(i,v); } }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        vertical-stretch: 1; background: #102039; border-radius: 12px;
+                                        VerticalLayout {
+                                            padding: 14px; spacing: 12px;
+                                            HorizontalLayout {
+                                                Text { text: root.uk ? "ТРЕНУВАННЯ · ГАММА ДО МАЖОР" : "PRACTICE · C MAJOR SCALE"; color: #e9f6ff; font-size: 16px; font-weight: 700; }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Text { text: (root.uk ? "Рахунок: " : "Score: ") + root.studio-score; color: #59c9ff; font-size: 15px; }
+                                                Button { text: root.uk ? "Спочатку" : "Reset"; clicked => { root.studio-reset-practice(); } }
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 14px;
+                                                Text { text: (root.uk ? "Зіграй ноту: " : "Play note: ") + root.studio-target; font-size: 26px; font-weight: 700; color: #f7fcff; vertical-alignment: center; }
+                                                Text { text: root.studio-feedback; color: #85dfff; font-size: 14px; vertical-alignment: center; }
+                                                Rectangle { horizontal-stretch: 1; background: transparent; }
+                                                Button {
+                                                    text: root.studio-click-on ? (root.uk ? "● Метроном УВІМК." : "● Metronome ON")
+                                                                               : (root.uk ? "○ Метроном ВИМК." : "○ Metronome OFF");
+                                                    clicked => {
+                                                        root.studio-click-on = !root.studio-click-on;
+                                                        root.studio-toggle-click(root.studio-click-on);
+                                                    }
+                                                }
+                                                Text { text: "" + root.studio-bpm + " BPM"; color: #8fd9fc; vertical-alignment: center; font-size: 14px; }
+                                                Button { text: "−"; clicked => { root.studio-bpm = max(40,root.studio-bpm - 10); root.studio-set-bpm(root.studio-bpm); } }
+                                                Button { text: "+"; clicked => { root.studio-bpm = min(240,root.studio-bpm + 10); root.studio-set-bpm(root.studio-bpm); } }
+                                            }
+                                            Text { text: root.uk ? "Звук синтезується окремо від плеєра. MIDI-вхід з фізичної клавіатури, запис і piano roll — наступні кроки." :
+                                                "The synthesizer is separate from playback. Hardware MIDI input, recording and piano roll come next."; color: #8daecc; font-size: 13px; }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Library" : VerticalLayout {
+                                    spacing: 15px;
+                                    Text { text: root.uk ? "Музична бібліотека" : "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: root.uk ? "Сканування у фоновому процесі — музика не зупиняється" : "Background scan keeps playback responsive"; color: #91b1d5; font-size: 17px; }
+                                    HorizontalLayout {
+                                        spacing: 10px;
+                                        Button { text: root.uk ? "Сканувати папку" : "Scan Folder"; clicked => { root.open-folder(); } }
+                                        Button { text: root.uk ? "Імпорт M3U" : "Import M3U"; clicked => { root.import-playlist(); } }
+                                        Button { text: root.uk ? "Експорт M3U8" : "Export M3U8"; clicked => { root.export-playlist(); } }
+                                        Rectangle { horizontal-stretch: 1; background: #080f1c; }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 9px;
+                                        Text { text: root.library-count; color: #4dc1ff; font-size: 16px; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Button { text: root.uk ? "◀ Назад" : "◀ Prev"; clicked => { root.library-page(-1); } }
+                                        Text { text: root.library-page-info; color: #b9d8f5; vertical-alignment: center; }
+                                        Button { text: root.uk ? "Далі ▶" : "Next ▶"; clicked => { root.library-page(1); } }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 8px;
+                                        Text { text: root.uk ? "Сортувати:" : "Sort:"; color: #9ec7ee; vertical-alignment: center; }
+                                        Button { text: root.uk ? "За порядком" : "Queue"; clicked => { root.sort-library(0); } }
+                                        Button { text: "А–Я"; clicked => { root.sort-library(1); } }
+                                        Button { text: "Я–А"; clicked => { root.sort-library(2); } }
+                                        Button { text: root.uk ? "★ Рейтинг" : "★ Rating"; clicked => { root.sort-library(3); } }
+                                        Button { text: root.uk ? "Папка" : "Folder"; clicked => { root.sort-library(4); } }
+                                        Rectangle { horizontal-stretch: 1; background: transparent; }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Rectangle {
+                                            width: 292px; background: #102039; border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px; spacing: 9px;
+                                                Text { text: root.uk ? "МОЇ ПЛЕЙЛИСТИ" : "MY PLAYLISTS"; font-size: 17px; font-weight: 700; color: #eaf4ff; }
+                                                LineEdit { placeholder-text: root.uk ? "Назва нового списку" : "New playlist name"; text <=> root.new-playlist-name; }
+                                                Button { text: root.uk ? "+ Створити з черги" : "+ Create from queue"; clicked => { root.create-playlist(root.new-playlist-name); } }
+                                                Text { text: (root.uk ? "Вибрано: " : "Selected: ") + root.active-playlist-name; color: #64beff; font-size: 12px; }
+                                                ScrollView {
+                                                    vertical-stretch: 1;
+                                                    content-height: root.playlist-names.length * 43px;
+                                                    vertical-scrollbar-policy: as-needed;
+                                                    horizontal-scrollbar-policy: always-off;
+                                                    VerticalLayout {
+                                                        spacing: 5px;
+                                                        for name[i] in root.playlist-names : Button {
+                                                            text: name;
+                                                            clicked => { root.load-playlist(i); }
+                                                        }
+                                                    }
+                                                }
+                                                Button { text: root.uk ? "Зберегти поточну чергу" : "Save current queue"; clicked => { root.save-active-playlist(); } }
+                                                Button { text: root.uk ? "Видалити вибраний" : "Delete selected"; clicked => { root.delete-active-playlist(); } }
+                                            }
+                                        }
+                                        Rectangle {
+                                            horizontal-stretch: 1; background: #102039; border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px; spacing: 6px;
+                                                Text { text: root.uk ? "ТРЕКИ · натисніть для відтворення" : "TRACKS · click to play"; color: #4dc1ff; font-size: 14px; }
+                                                ScrollView {
+                                                    vertical-stretch: 1;
+                                                    content-height: root.library-items.length * 47px;
+                                                    vertical-scrollbar-policy: as-needed;
+                                                    horizontal-scrollbar-policy: always-off;
+                                                    VerticalLayout {
+                                                        spacing: 4px;
+                                                        for file[i] in root.library-items : HorizontalLayout {
+                                                            height: 43px;
+                                                            spacing: 6px;
+                                                            TrackLine {
+                                                                horizontal-stretch: 1;
+                                                                number: "" + (i + 1); title: file;
+                                                                artist: root.uk ? "Відтворити" : "Play";
+                                                                activated => { root.play-library-track(i); }
+                                                            }
+                                                            Button {
+                                                                width: 78px;
+                                                                text: root.library-ratings[i];
+                                                                clicked => { root.rate-library-track(i); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                if root.active-page == "Settings" : VerticalLayout {
+                                    spacing: 15px;
+                                    Text { text: (root.uk ? "Налаштування" : "Settings"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: root.uk ? "Аудіопристрої, теми та плагіни з’являться пізніше." : "Audio devices, themes, downloads and plugins will appear here."; color: #91b1d5; font-size: 17px; }
+                                    Rectangle { vertical-stretch: 1; background: #102039; border-radius: 12px; }
+                                }
+                                Rectangle {
+                                    height: 32px;
+                                    background: #0d1d32;
+                                    border-radius: 8px;
+                                    Text {
+                                        text: root.notice;
+                                        x: 12px;
+                                        height: parent.height;
+                                        vertical-alignment: center;
+                                        color: #5dc4ff;
+                                        font-size: 12px;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
