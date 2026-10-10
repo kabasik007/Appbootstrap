@@ -8,6 +8,7 @@ mod library;
 mod playback;
 mod pcm_ring;
 mod playlist;
+mod presets;
 mod queue;
 mod roadmap;
 mod session;
@@ -17,7 +18,8 @@ use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
 use playback::{format_duration, Transport};
 use queue::PlayQueue;
-use session::{SavedSession, SessionStore};
+use presets::EqPreset;
+use session::{NamedPlaylist, SavedSession, SessionStore};
 use slint::{ComponentHandle, Model, SharedString, VecModel};
 use visualizer::BANDS;
 use std::{cell::{Cell, RefCell}, error::Error, path::PathBuf, rc::Rc,
@@ -51,6 +53,64 @@ fn save_playlist_job(path: PathBuf, tracks: Vec<PathBuf>, replies: Sender<Playli
 }
 
 const EQ_BAND_COUNT: usize = 31;
+const LIBRARY_PAGE_SIZE: usize = 12;
+
+#[derive(Default)]
+struct LibraryView {
+    query: String,
+    page: usize,
+    visible: Vec<usize>,
+}
+
+struct LibraryPresentation {
+    queue: Rc<RefCell<PlayQueue>>,
+    rows: Rc<VecModel<SharedString>>,
+    view: RefCell<LibraryView>,
+    window: slint::Weak<AppWindow>,
+}
+
+fn refresh_library(library: &LibraryPresentation) {
+    let entries = library.queue.borrow().snapshot();
+    let mut view = library.view.borrow_mut();
+    let query = view.query.trim().to_lowercase();
+    let matches: Vec<usize> = entries.iter().enumerate()
+        .filter_map(|(i, path)| {
+            if query.is_empty() || path.file_name().unwrap_or_default()
+                .to_string_lossy().to_lowercase().contains(&query) { Some(i) } else { None }
+        }).collect();
+    let pages = matches.len().saturating_sub(1) / LIBRARY_PAGE_SIZE + 1;
+    view.page = view.page.min(pages - 1);
+    let start = view.page * LIBRARY_PAGE_SIZE;
+    view.visible = matches.iter().skip(start).take(LIBRARY_PAGE_SIZE).copied().collect();
+    let filenames: Vec<SharedString> = view.visible.iter()
+        .map(|i| SharedString::from(entries[*i].file_name().unwrap_or_default()
+            .to_string_lossy().as_ref())).collect();
+    library.rows.set_vec(filenames);
+    if let Some(window) = library.window.upgrade() {
+        window.set_library_page_info(format!("{}/{} · {}",
+            view.page+1, pages, matches.len()).into());
+        window.set_library_count(format!("{} {}",
+            entries.len(), if window.get_uk() { "треків" } else { "tracks" }).into());
+    }
+}
+
+fn update_playlist_names(names: &[NamedPlaylist], model: &VecModel<SharedString>) {
+    model.set_vec(names.iter().map(|p| SharedString::from(
+        format!("♫ {} ({})", p.name, p.tracks.len()))).collect::<Vec<_>>());
+}
+
+fn session_snapshot(
+    queue: &PlayQueue, playlists: &[NamedPlaylist],
+    all_presets: &[EqPreset], current_eq: &EqPreset,
+) -> SavedSession {
+    SavedSession {
+        tracks: queue.snapshot(), selected: queue.selected_index(),
+        playlists: playlists.to_vec(),
+        presets: all_presets.iter().skip(presets::factory().len()).cloned().collect(),
+        last_eq: current_eq.clone(),
+    }
+}
+
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Scanner mode is the SAME executable in a separate process with no GUI or audio.
@@ -103,6 +163,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     let queue = Rc::new(RefCell::new(PlayQueue::default()));
     let model: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
     ui.set_library_items(model.clone().into());
+    let library = Rc::new(LibraryPresentation {
+        queue: Rc::clone(&queue), rows: Rc::clone(&model),
+        view: RefCell::new(LibraryView::default()), window: ui.as_weak(),
+    });
+    refresh_library(&library);
+    let named_playlists: Rc<RefCell<Vec<NamedPlaylist>>> = Rc::new(RefCell::new(Vec::new()));
+    let selected_playlist = Rc::new(Cell::new(None::<usize>));
+    let playlist_names: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
+    ui.set_playlist_names(playlist_names.clone().into());
+    let all_presets: Rc<RefCell<Vec<EqPreset>>> = Rc::new(RefCell::new(presets::factory()));
+    let preset_names: Rc<VecModel<SharedString>> = Rc::new(VecModel::from(
+        all_presets.borrow().iter().map(|p| SharedString::from(p.name.as_str()))
+            .collect::<Vec<_>>()
+    ));
+    ui.set_preset_names(preset_names.clone().into());
+    let current_eq = Rc::new(RefCell::new(EqPreset::flat()));
+    let eq_values: Rc<VecModel<f32>> = Rc::new(VecModel::from(vec![0.0; 31]));
+    ui.set_eq_bands(eq_values.clone().into());
+    let eq_programmatic = Rc::new(Cell::new(false));
+    let touched_eq = Rc::new(Cell::new(false));
     // Single background session I/O worker. All disk reads/writes stay off UI.
     let session = Rc::new(SessionStore::start()?);
     let session_dirty = Rc::new(Cell::new(false));
@@ -139,6 +219,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let rows = model.clone();
     let touched = user_touched_queue.clone();
     let dirty = session_dirty.clone();
+    let lib = library.clone();
     ui.on_open_file(move || {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Audio", &["mp3","flac","wav","ogg","m4a","aac","opus"]).pick_file()
@@ -146,7 +227,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             touched.set(true);
             dirty.set(true);
             q.borrow_mut().append_selected(path.clone());
-            refresh_list(&q, &rows);
+            refresh_library(&lib);
             let _ = cmd.send(Command::Open(path));
         }
     });
@@ -158,6 +239,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let weak = ui.as_weak();
     let touched = user_touched_queue.clone();
     let dirty = session_dirty.clone();
+    let lib = library.clone();
     ui.on_open_folder(move || {
         // Native modal file/folder chooser is explicitly user initiated.
         if let Some(folder) = rfd::FileDialog::new().pick_folder() {
@@ -186,9 +268,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let q = queue.clone();
     let cmd = commands.clone();
     let dirty = session_dirty.clone();
+    let lib = library.clone();
     ui.on_play_library_track(move |index| {
         if index >= 0 {
-            if let Some(path) = q.borrow_mut().select(index as usize) {
+            let actual = lib.view.borrow().visible.get(index as usize).copied();
+            if let Some(path) = actual.and_then(|i| q.borrow_mut().select(i)) {
                 dirty.set(true);
                 let _ = cmd.send(Command::Open(path));
             }
@@ -214,13 +298,31 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let cmd = commands.clone();
+    let eq_ref = current_eq.clone();
+    let suppress = eq_programmatic.clone();
+    let dirty = session_dirty.clone();
+    let touched = touched_eq.clone();
     ui.on_set_eq_band(move |index, db| {
-        if index >= 0 && (index as usize) < EQ_BAND_COUNT {
+        if !suppress.get() && index >= 0 && (index as usize) < EQ_BAND_COUNT && db.is_finite() {
+            eq_ref.borrow_mut().bands[index as usize] = db.clamp(-12.0, 12.0);
+            touched.set(true);
+            dirty.set(true);
             let _ = cmd.send(Command::SetEqBand(index as usize, db));
         }
     });
     let cmd = commands.clone();
-    ui.on_set_preamp(move |db| { let _ = cmd.send(Command::SetPreamp(db)); });
+    let eq_ref = current_eq.clone();
+    let suppress = eq_programmatic.clone();
+    let dirty = session_dirty.clone();
+    let touched = touched_eq.clone();
+    ui.on_set_preamp(move |db| {
+        if !suppress.get() && db.is_finite() {
+            eq_ref.borrow_mut().preamp = db.clamp(-18.0, 6.0);
+            touched.set(true);
+            dirty.set(true);
+            let _ = cmd.send(Command::SetPreamp(db));
+        }
+    });
     let cmd = commands.clone();
     ui.on_set_bass(move |db| { let _ = cmd.send(Command::SetBass(db)); });
     let cmd = commands.clone();
@@ -230,6 +332,170 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cmd = commands.clone();
     ui.on_enable_eq(move |on| { let _ = cmd.send(Command::EnableEq(on)); });
 
+    // Factory presets + saved user presets share one compact UI model.
+    let cmd = commands.clone();
+    let values = eq_values.clone();
+    let eq_ref = current_eq.clone();
+    let all = all_presets.clone();
+    let suppress = eq_programmatic.clone();
+    let touched = touched_eq.clone();
+    let dirty = session_dirty.clone();
+    let weak = ui.as_weak();
+    ui.on_apply_eq_preset(move |index| {
+        if index < 0 { return; }
+        let Some(preset) = all.borrow().get(index as usize).cloned() else { return; };
+        eq_ref.replace(preset.clone());
+        suppress.set(true);
+        values.set_vec(preset.bands.to_vec());
+        if let Some(window) = weak.upgrade() {
+            window.set_eq_preamp(preset.preamp);
+            window.set_notice(format!("EQ: {}", preset.name).into());
+        }
+        suppress.set(false);
+        touched.set(true);
+        dirty.set(true);
+        let _ = cmd.send(Command::SetEqCurve(preset.bands, preset.preamp));
+    });
+
+    let presets_all = all_presets.clone();
+    let names = preset_names.clone();
+    let eq_ref = current_eq.clone();
+    let dirty = session_dirty.clone();
+    let touched = touched_eq.clone();
+    let weak = ui.as_weak();
+    ui.on_save_eq_preset(move |name| {
+        let label = name.trim();
+        let Some(window) = weak.upgrade() else { return; };
+        if label.is_empty() {
+            window.set_notice("Введіть назву пресету".into());
+            return;
+        }
+        let mut current = eq_ref.borrow().clone();
+        current.name = label.into();
+        current = current.sanitize();
+        let mut all = presets_all.borrow_mut();
+        let builtins = presets::factory().len();
+        if let Some(pos) = all.iter().enumerate().skip(builtins)
+            .position(|(_, p)| p.name == current.name) {
+            all[builtins + pos] = current.clone();
+        } else if all.len() < builtins + 24 {
+            all.push(current.clone());
+        } else {
+            window.set_notice("Ліміт 24 користувацьких пресетів".into());
+            return;
+        }
+        names.set_vec(all.iter().map(|p| SharedString::from(p.name.as_str())).collect::<Vec<_>>());
+        touched.set(true);
+        dirty.set(true);
+        window.set_custom_preset_name("".into());
+        window.set_notice(format!("Пресет збережено: {}", current.name).into());
+    });
+
+    let lib = library.clone();
+    ui.on_search_library(move |term| {
+        let mut view = lib.view.borrow_mut();
+        view.query = term.to_string();
+        view.page = 0;
+        drop(view);
+        refresh_library(&lib);
+    });
+    let lib = library.clone();
+    ui.on_library_page(move |direction| {
+        {
+            let mut view = lib.view.borrow_mut();
+            if direction < 0 { view.page = view.page.saturating_sub(1); }
+            else { view.page = view.page.saturating_add(1); }
+        }
+        refresh_library(&lib);
+    });
+
+    let playlists = named_playlists.clone();
+    let selected = selected_playlist.clone();
+    let names = playlist_names.clone();
+    let q = queue.clone();
+    let dirty = session_dirty.clone();
+    let touched = user_touched_queue.clone();
+    let weak = ui.as_weak();
+    ui.on_create_playlist(move |name| {
+        let Some(window) = weak.upgrade() else { return; };
+        let title = name.trim().chars().take(64).collect::<String>();
+        if title.is_empty() { window.set_notice("Введіть назву плейлиста".into()); return; }
+        let mut all = playlists.borrow_mut();
+        if all.iter().any(|p| p.name.eq_ignore_ascii_case(&title)) {
+            window.set_notice("Плейлист із такою назвою вже існує".into()); return;
+        }
+        if all.len() >= 64 { window.set_notice("Максимум 64 плейлисти".into()); return; }
+        all.push(NamedPlaylist { name: title.clone(), tracks: q.borrow().snapshot() });
+        selected.set(Some(all.len() - 1));
+        update_playlist_names(&all, &names);
+        window.set_active_playlist_name(title.clone().into());
+        window.set_new_playlist_name("".into());
+        window.set_notice(format!("Створено плейлист: {title}").into());
+        dirty.set(true);
+        touched.set(true);
+    });
+
+    let lib = library.clone();
+    let q = queue.clone();
+    let lists = named_playlists.clone();
+    let selected = selected_playlist.clone();
+    let touched = user_touched_queue.clone();
+    let dirty = session_dirty.clone();
+    let weak = ui.as_weak();
+    ui.on_load_playlist(move |index| {
+        if index < 0 { return; }
+        let Some(item) = lists.borrow().get(index as usize).cloned() else { return; };
+        selected.set(Some(index as usize));
+        q.borrow_mut().clear();
+        q.borrow_mut().append(item.tracks);
+        if let Some(window) = weak.upgrade() {
+            window.set_active_playlist_name(item.name.clone().into());
+            window.set_notice(format!("Відкрито плейлист: {}", item.name).into());
+        }
+        touched.set(true);
+        dirty.set(true);
+        lib.view.borrow_mut().page = 0;
+        refresh_library(&lib);
+    });
+
+    let q = queue.clone();
+    let lists = named_playlists.clone();
+    let selected = selected_playlist.clone();
+    let names = playlist_names.clone();
+    let dirty = session_dirty.clone();
+    let weak = ui.as_weak();
+    ui.on_save_active_playlist(move || {
+        let Some(index) = selected.get() else { return; };
+        let mut all = lists.borrow_mut();
+        if let Some(item) = all.get_mut(index) {
+            item.tracks = q.borrow().snapshot();
+            update_playlist_names(&all, &names);
+            dirty.set(true);
+            if let Some(window) = weak.upgrade() {
+                window.set_notice("Плейлист оновлено".into());
+            }
+        }
+    });
+
+    let lists = named_playlists.clone();
+    let selected = selected_playlist.clone();
+    let names = playlist_names.clone();
+    let dirty = session_dirty.clone();
+    let weak = ui.as_weak();
+    ui.on_delete_active_playlist(move || {
+        let Some(index) = selected.get() else { return; };
+        let mut all = lists.borrow_mut();
+        if index >= all.len() { return; }
+        all.remove(index);
+        selected.set(None);
+        update_playlist_names(&all, &names);
+        dirty.set(true);
+        if let Some(window) = weak.upgrade() {
+            window.set_active_playlist_name("".into());
+            window.set_notice("Плейлист видалено, поточну чергу збережено".into());
+        }
+    });
+
     // UI only: consume ready messages without blocking. No scanning or decoding.
     let scanner_shutdown = scanner.clone();
     let command_shutdown = commands.clone();
@@ -237,6 +503,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     let dirty_for_updates = Rc::clone(&session_dirty);
     let touched_before_restore = Rc::clone(&user_touched_queue);
     let session_shutdown_queue = Rc::clone(&queue);
+    let persist_playlists = named_playlists.clone();
+    let persist_presets = all_presets.clone();
+    let persist_eq = current_eq.clone();
+    let restore_eq_touched = touched_eq.clone();
+    let restore_eq_bands = eq_values.clone();
+    let restore_suppress = eq_programmatic.clone();
+    let restore_presets_model = preset_names.clone();
+    let restore_playlist_model = playlist_names.clone();
+    let restore_selected = selected_playlist.clone();
+    let restore_commands = commands.clone();
+    let library_for_timer = library.clone();
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
@@ -246,17 +523,33 @@ fn main() -> Result<(), Box<dyn Error>> {
         // Loading happens in the persistence worker; nothing reads disk here.
         if let Some(loaded) = session_for_updates.poll_loaded() {
             match loaded {
-                Ok(state) if !touched_before_restore.get() => {
-                    let selected = state.selected;
-                    queue.borrow_mut().clear();
-                    queue.borrow_mut().append(state.tracks);
-                    if let Some(index) = selected { let _ = queue.borrow_mut().select(index); }
-                    refresh_list(&queue, &model);
-                    let count = queue.borrow().count();
-                    window.set_library_count(format!("{count} tracks").into());
-                    window.set_notice(format!("Restored {count} tracks from previous session").into());
+                Ok(state) => {
+                    persist_playlists.replace(state.playlists);
+                    update_playlist_names(&persist_playlists.borrow(), &restore_playlist_model);
+                    restore_selected.set(None);
+                    let mut all = presets::factory();
+                    all.extend(state.presets);
+                    persist_presets.replace(all);
+                    restore_presets_model.set_vec(persist_presets.borrow().iter()
+                        .map(|p| SharedString::from(p.name.as_str())).collect::<Vec<_>>());
+                    if !restore_eq_touched.get() {
+                        let eq = state.last_eq;
+                        persist_eq.replace(eq.clone());
+                        restore_suppress.set(true);
+                        restore_eq_bands.set_vec(eq.bands.to_vec());
+                        window.set_eq_preamp(eq.preamp);
+                        restore_suppress.set(false);
+                        let _ = restore_commands.send(Command::SetEqCurve(eq.bands, eq.preamp));
+                    }
+                    if !touched_before_restore.get() {
+                        let selected = state.selected;
+                        queue.borrow_mut().clear();
+                        queue.borrow_mut().append(state.tracks);
+                        if let Some(index) = selected { let _ = queue.borrow_mut().select(index); }
+                        refresh_library(&library_for_timer);
+                        window.set_notice("Попередню сесію відновлено".into());
+                    }
                 }
-                Ok(_) => {} // User action has priority over stale session loading.
                 Err(reason) => window.set_notice(format!("Session recovery: {reason}").into()),
             }
         }
@@ -270,7 +563,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     queue.borrow_mut().clear();
                     queue.borrow_mut().append(paths);
                     dirty_for_updates.set(true);
-                    refresh_list(&queue, &model);
+                    refresh_library(&library_for_timer);
                     window.set_library_count(format!("{size} tracks").into());
                     window.set_notice(format!("Imported {size} playlist entries").into());
                 }
@@ -292,7 +585,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             match event {
                 ScanEvent::Batch(id,paths) if id == scan_serial.get() => {
                     queue.borrow_mut().append(paths);
-                    refresh_list(&queue,&model);
+                    refresh_library(&library_for_timer);
                     window.set_library_count(format!("{} tracks", queue.borrow().count()).into());
                 }
                 ScanEvent::Done(id,total) if id == scan_serial.get() => {
@@ -328,10 +621,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         if dirty_for_updates.replace(false) {
-            let snapshot = {
-                let q = queue.borrow();
-                SavedSession { tracks: q.snapshot(), selected: q.selected_index() }
-            };
+            let snapshot = session_snapshot(
+                &queue.borrow(), &persist_playlists.borrow(),
+                &persist_presets.borrow(), &persist_eq.borrow()
+            );
             session_for_updates.enqueue_save(snapshot);
         }
     });
@@ -340,15 +633,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     scanner_shutdown.shutdown();
     let _ = command_shutdown.send(Command::Shutdown);
     // Flush the latest state and join I/O worker before exiting.
-    let final_snapshot = {
-        let q = session_shutdown_queue.borrow();
-        SavedSession { tracks: q.snapshot(), selected: q.selected_index() }
-    };
+    let final_snapshot = session_snapshot(
+        &session_shutdown_queue.borrow(), &named_playlists.borrow(),
+        &all_presets.borrow(), &current_eq.borrow()
+    );
     session.shutdown(final_snapshot);
     Ok(())
 }
 
-fn refresh_list(queue: &Rc<RefCell<PlayQueue>>, rows: &Rc<VecModel<SharedString>>) {
-    let preview = queue.borrow().preview(10);
-    rows.set_vec(preview.into_iter().map(SharedString::from).collect::<Vec<_>>());
-}
