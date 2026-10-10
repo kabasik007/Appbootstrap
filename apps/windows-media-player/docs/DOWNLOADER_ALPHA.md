@@ -25,7 +25,7 @@ winget install -e --id DenoLand.Deno
 | Профіль | Реалізація |
 |---|---|
 | MP3 320k | `-x --audio-format mp3 --audio-quality 320K` через FFmpeg |
-| Аудіо ориг. | `-f ba`, найкращий аудіопотік без MP3-транскодування |
+| Аудіо ориг. | `-f ba/b -x --audio-format best`, виділення аудіопотоку без примусового MP3-транскодування через FFmpeg |
 | 1440p / MKV | `-f bv*[height<=1440]+ba/b[height<=1440]` + FFmpeg mux |
 | 1080p / MKV | те саме з обмеженням 1080p |
 | Best / MKV | `-f bv*+ba/b` + FFmpeg mux |
