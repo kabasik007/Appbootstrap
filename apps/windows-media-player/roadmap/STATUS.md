@@ -14,7 +14,7 @@
 | P2 | Advanced DSP / EQ | in_progress | Frequency response and signal tests, real hardware performance budget, no audible zipper/clicks |
 | P3 | Library & playlists | in_progress | 50k files, cancel/rescan, offline devices and persisted playlists tested |
 | P4 | Visualizers & themes | in_progress | FFT driven by real PCM, 30/60 fps caps and rendering measurements |
-| P5 | Media downloader | planned | Authorized audio/video/playlist downloads, cancellation and error reporting verified |
+| P5 | Media downloader | in_progress | Authorized audio/video/playlist downloads, cancellation and error reporting verified |
 | P6 | Extension API | planned | Version mismatch/crashing plugin safely disabled without playback dropouts |
 | P7 | Release & distribution | in_progress | Signed installer/portable build and release smoke tests on supported Windows versions |
 
@@ -84,10 +84,10 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-501 | high | yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity | todo | Pinned versions, licensing and missing-tool errors |
-| ZP-502 | high | URL analysis, playlist selection and safe format presets | todo | Preview/choose on permitted fixtures |
-| ZP-503 | high | Bounded persisted job queue, retry/cancel and progress IPC | todo | Interrupt/restart/download-with-music stress |
-| ZP-504 | medium | Postprocess audio, sanitize destinations and auto-import completed files | todo | File escaping, transcode and duplicate tests |
+| ZP-501 | high | yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity | in_progress | Rust probes for yt-dlp, FFmpeg, Deno plus external executable discovery added; require Windows tool/version integration, licensing and checksum review. |
+| ZP-502 | high | URL analysis, playlist selection and safe format presets | in_progress | Safe fixed argument profiles MP3 320K, original audio, 1080/1440p MKV FFmpeg merge and playlist cap 200 coded; analysis preview and individual selection not implemented. |
+| ZP-503 | high | Bounded persisted job queue, retry/cancel and progress IPC | implemented_unverified | Background single-worker queue, progress, cancel/retry, disk-persisted job history and crash interruption behavior coded. Rust/Windows compiler test and live network simulation pending. |
+| ZP-504 | medium | Postprocess audio, sanitize destinations and auto-import completed files | in_progress | FFmpeg postprocess through yt-dlp, destination control, output file reporting and audio library import coded; path stress and video library auto-import pending. |
 
 ### P6 — Extension API
 
