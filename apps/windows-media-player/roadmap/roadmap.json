@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: P1 decoder-open cancellation guard, full 31-slider GUI and CI mapping validator committed. Windows cargo build and audible playback still unverified; no claimed performance metrics.",
+  "status_note": "2026-10-10: Windows CI run 38036361366 succeeded: cargo check, 46 Rust unit tests, optimized EXE and subprocess scanner smoke. UA default, EN toggle, factory/custom EQ presets, named playlists and paged filename search included. Real user audio/UI testing, SQLite index and installer pending.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -22,8 +22,8 @@
           "id": "ZP-001",
           "title": "Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock",
           "priority": "blocker",
-          "status": "todo",
-          "verification": "GitHub Windows CI configured for cargo check/test/release, scanner smoke and EQ contract. Toolchain unavailable locally; must obtain actual passing run and commit Cargo.lock."
+          "status": "in_progress",
+          "verification": "GitHub Actions Windows run 38036361366: cargo check, 46 Rust tests, release EXE and scanner subprocess smoke passed. Cargo.lock uploaded as artifact; commit for reproducibility and audio hardware smoke remain."
         },
         {
           "id": "ZP-002",
@@ -118,7 +118,7 @@
           "title": "Complete editable 31-band GUI and 10-band compact preset view",
           "priority": "high",
           "status": "in_progress",
-          "verification": "All 31 graphic EQ sliders now directly mapped to DSP, frequencies checked by dependency-free CI validator; compact 10-band preset view and saved presets still pending."
+          "verification": "Full 31-band control UI and 8 built-in EQ presets + user preset save/restore shipped in alpha source. 10-band compact mode and hardware listening remain."
         },
         {
           "id": "ZP-204",
@@ -131,8 +131,8 @@
           "id": "ZP-205",
           "title": "User-defined DSP presets with import/export",
           "priority": "medium",
-          "status": "todo",
-          "verification": "Schema and migration tests"
+          "status": "in_progress",
+          "verification": "Custom EQ presets and last curve persist to backward-compatible session-v1.json; preset-specific standalone import/export and migration to schema-v2 pending."
         }
       ]
     },
@@ -155,21 +155,21 @@
           "title": "Persist folders and playlists in SQLite with migrations",
           "priority": "high",
           "status": "in_progress",
-          "verification": "Interim versioned JSON session restore/save runs on a dedicated I/O thread with backup recovery; full SQLite library/migrations/folders still required and Windows tests pending"
+          "verification": "Named playlist creation, update, delete and restore via background JSON session worker implemented and 46 Windows Rust tests passed; SQLite indexing/migrations still pending."
         },
         {
           "id": "ZP-303",
           "title": "Virtualized searchable library, sorting and metadata tags",
           "priority": "high",
-          "status": "todo",
-          "verification": "Search under 100 ms on reference library"
+          "status": "in_progress",
+          "verification": "Search by filename and page through 12 tracks at a time; mapping to correct queue index implemented. Sorting, metadata tags, index and load-time benchmarking pending."
         },
         {
           "id": "ZP-304",
           "title": "M3U/M3U8 import/export and proper track queue selection",
           "priority": "medium",
           "status": "implemented_unverified",
-          "verification": "M3U/M3U8 UTF-8 import/export, relative paths and Unicode roundtrip tests added; still requires Windows UI/large playlist smoke"
+          "verification": "M3U/M3U8 import/export, named queue playlists and session persistence. Windows tests passed in CI; manual UI behavior on user's PC not yet confirmed."
         },
         {
           "id": "ZP-305",
@@ -287,7 +287,7 @@
     {
       "id": "P7",
       "name": "Release & distribution",
-      "status": "planned",
+      "status": "in_progress",
       "goal": "Small, reliable installable Windows product",
       "gate": "Signed installer/portable build and release smoke tests on supported Windows versions",
       "tasks": [
@@ -295,8 +295,8 @@
           "id": "ZP-701",
           "title": "Windows clean install/upgrade/uninstall/portable packaging",
           "priority": "high",
-          "status": "todo",
-          "verification": "Two Windows versions, update/uninstall tests"
+          "status": "in_progress",
+          "verification": "Unsigned portable Windows x64 alpha created from run 38036361366 (46 Rust tests/scan smoke passed). Installer, clean update, MSVC/smart screen and Win10/11 validation pending."
         },
         {
           "id": "ZP-702",
