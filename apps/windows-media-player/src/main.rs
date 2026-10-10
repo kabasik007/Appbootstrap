@@ -349,5 +349,5 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn refresh_list(queue: &Rc<RefCell<PlayQueue>>, rows: &Rc<VecModel<SharedString>>) {
     let preview = queue.borrow().preview(10);
-    rows.set_vec(preview.into_iter().map(SharedString::from).collect());
+    rows.set_vec(preview.into_iter().map(SharedString::from).collect::<Vec<_>>());
 }
