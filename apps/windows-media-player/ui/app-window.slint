@@ -345,25 +345,35 @@ export component AppWindow inherits Window {
                                                 ScrollView {
                                                     height: 154px;
                                                     horizontal-stretch: 1;
-                                                    content-width: 990px;
+                                                    content-width: 1250px;
                                                     content-height: 153px;
                                                     horizontal-scrollbar-policy: as-needed;
                                                     vertical-scrollbar-policy: always-off;
                                                     HorizontalLayout {
-                                                        spacing: 4px;
+                                                        spacing: 5px;
                                                         alignment: start;
+                                                        VerticalLayout {
+                                                            width: 39px;
+                                                            spacing: 0px;
+                                                            Text { text: "+12"; height: 30px; font-size: 11px; color: #61cdf8; }
+                                                            Text { text: "0 dB"; height: 47px; font-size: 11px; color: #d6e8fc; }
+                                                            Text { text: "-12"; height: 35px; font-size: 11px; color: #61cdf8; }
+                                                        }
                                                         for hz[i] in ["20","25","31","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k","20k"] : VerticalLayout {
-                                                            width: 27px;
+                                                            width: 30px;
                                                             spacing: 3px;
                                                             Slider {
                                                                 orientation: vertical;
-                                                                minimum: -12;
-                                                                maximum: 12;
-                                                                value: root.eq-bands[i];
+                                                                minimum: 0;
+                                                                maximum: 24;
+                                                                // Slint's vertical Slider grows downwards. Invert
+                                                                // only its UI coordinate, NOT the DSP gain.
+                                                                value: 12 - root.eq-bands[i];
                                                                 height: 110px;
-                                                                changed(v) => { root.set-eq-band(i,v); }
+                                                                changed(v) => { root.set-eq-band(i,12 - v); }
                                                             }
                                                             Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
+                                                            Text { text: root.eq-bands[i] + " dB"; color: #77cdfa; horizontal-alignment: center; font-size: 9px; }
                                                         }
                                                     }
                                                 }
