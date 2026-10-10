@@ -155,6 +155,11 @@ impl Downloader {
     pub fn snapshot(&self) -> Snapshot {
         self.state.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
+    /// Drain completed local audio files exactly once for the Library UI.
+    pub fn take_imported(&self) -> Vec<PathBuf> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::take(&mut state.imported_files)
+    }
     pub fn shutdown(mut self) {
         let _ = self.command.send(Action::Shutdown);
         if let Some(worker) = self.worker.take() { let _ = worker.join(); }
@@ -287,14 +292,15 @@ fn probes() -> String {
 /// Fixed command vector. No shell, cookies, arbitrary user args or local files.
 /// 1440p is QHD (2560x1440), sometimes marketed as "2K".
 fn arguments(job: &Job) -> Vec<String> {
-    let mut args = vec![
+    let mut args = [
         "--ignore-config", "--no-overwrites", "--continue",
         "--newline", "--no-color", "--no-mtime",
-        "--paths", &job.folder.to_string_lossy(),
         "--output", "%(title).180B [%(id)s].%(ext)s",
         "--progress-template", "download:ZILLA_PROGRESS:%(progress._percent_str)s",
         "--print", "after_move:ZILLA_FILE:%(filepath)s",
-    ].into_iter().map(String::from).collect::<Vec<_>>();
+    ].into_iter().map(str::to_string).collect::<Vec<_>>();
+    args.push("--paths".into());
+    args.push(job.folder.to_string_lossy().to_string());
     if job.playlist {
         args.extend(["--yes-playlist", "--playlist-end", "200"].map(str::to_string));
     } else {
@@ -328,7 +334,7 @@ fn spawn_reader<R: std::io::Read + Send + 'static>(
                 }
             } else if let Some(raw) = line.strip_prefix("ZILLA_FILE:") {
                 // File notifications are infrequent and must not be lost.
-                let _ = tx.send(Output::File(PathBuf::from(raw)));
+                let _ = tx.try_send(Output::File(PathBuf::from(raw)));
             } else if line.to_ascii_lowercase().contains("error:") {
                 let detail = line.chars().take(MAX_LOG).collect::<String>();
                 let _ = tx.try_send(Output::Error(detail));
