@@ -54,8 +54,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Action::SecondaryWake => displays::set_secondary_power(true).map(|s| (s, None)),
                 Action::Quit => unreachable!(),
             };
+            let ui_weak = weak.clone();
             let _ = slint::invoke_from_event_loop(move || {
-                if let Some(ui) = weak.upgrade() {
+                if let Some(ui) = ui_weak.upgrade() {
                     match result {
                         Ok((message, mode)) => {
                             ui.set_status_text(message.into());
@@ -104,8 +105,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let cpu = format!("CPU: {:.0}% (не вати)", system.global_cpu_usage());
             let memory = format!("RAM: {:.1}/{:.1} ГБ",
                 system.used_memory() as f64 / 1e9, system.total_memory() as f64 / 1e9);
+            let ui_weak = weak.clone();
             let _ = slint::invoke_from_event_loop(move || {
-                if let Some(ui) = weak.upgrade() {
+                if let Some(ui) = ui_weak.upgrade() {
                     ui.set_cpu_text(cpu.into());
                     ui.set_ram_text(memory.into());
                 }
