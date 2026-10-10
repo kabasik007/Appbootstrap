@@ -734,8 +734,42 @@ fn main() -> Result<(), Box<dyn Error>> {
     let weak = ui.as_weak();
     let timer = slint::Timer::default();
     let pending_advance = Rc::new(Cell::new(false));
+    #[cfg(windows)]
+    let media_keys = Rc::new(RefCell::new(Some(media_keys::MediaKeys::start())));
+    #[cfg(windows)]
+    let media_keys_for_updates = media_keys.clone();
     timer.start(slint::TimerMode::Repeated, Duration::from_millis(200), move || {
         let Some(window) = weak.upgrade() else { return };
+        // Physical headset/keyboard media buttons arrive via a Win32
+        // message-loop thread. Never call Slint on that background thread.
+        #[cfg(windows)]
+        if let Some(keys) = media_keys_for_updates.borrow().as_ref() {
+            for _ in 0..8 {
+                let Ok(action) = keys.events.try_recv() else { break };
+                match action {
+                    media_keys::MediaAction::PlayPause => {
+                        let _ = commands.send(Command::TogglePlay);
+                    }
+                    media_keys::MediaAction::Stop => {
+                        window.set_progress_percent(0.0);
+                        window.set_elapsed_text("00:00".into());
+                        let _ = commands.send(Command::Stop);
+                    }
+                    media_keys::MediaAction::Next | media_keys::MediaAction::Previous => {
+                        let path = if action == media_keys::MediaAction::Next {
+                            queue.borrow_mut().next()
+                        } else { queue.borrow_mut().previous() };
+                        if let Some(path) = path {
+                            window.set_progress_percent(0.0);
+                            window.set_elapsed_text("00:00".into());
+                            dirty_for_updates.set(true);
+                            let _ = commands.send(Command::Open(path));
+                        }
+                    }
+                }
+            }
+        }
+
         // Poll analyzer without waiting. The result is owned by Slint UI only;
         // download jobs receive immutable selected playlist indices.
         let finished = pending_analysis.borrow().as_ref().and_then(|rx| {
@@ -919,6 +953,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
+    #[cfg(windows)]
+    if let Some(keys) = media_keys.borrow_mut().take() { keys.shutdown(); }
     downloader.shutdown();
     scanner_shutdown.shutdown();
     let _ = command_shutdown.send(Command::Shutdown);
