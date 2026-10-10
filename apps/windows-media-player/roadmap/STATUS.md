@@ -37,9 +37,9 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-101 | blocker | Open audio, Play/Pause/Stop, seek, master volume | implemented_unverified | Windows manual smoke + transport tests |
+| ZP-101 | blocker | Open audio, Play/Pause/Stop, seek, master volume | implemented_unverified | Open/next/previous/auto-advance now reset seek/elapsed immediately in UI and new audio state. Media keyboard Play/Pause/Stop/Next/Previous uses Win32 hotkey worker; physical keyboard and playback manual smoke pending. |
 | ZP-102 | blocker | Replace decoder-on-callback with background producer and bounded PCM ring | implemented_unverified | Background Rodio decoder, bounded atomic PCM SPSC ring and nonblocking output source added. Generated WAV unit fixture + Windows cargo test, seek stress and underrun profiling required. |
-| ZP-103 | high | Coalesced transport commands and cancellation generations | in_progress | Adjacent Seek command coalescing exists; timeout/failed decoder setup now has cancellation guard. Need transport epochs, superseded seek cancellation and Windows rapid-switch stress. |
+| ZP-103 | high | Coalesced transport commands and cancellation generations | in_progress | Adjacent seek coalescing and setup cancellation exist. Reset-on-switch bug fixed on both Slint and audio timeline, preserving previous state on open failure. Transport epochs and 500-switch test still pending. |
 | ZP-104 | high | Click-free pause, stop, seek and track switch with short audio fades | implemented_unverified | Listen and analyze waveforms for clicks |
 | ZP-105 | high | Detect and recover missing/changed WASAPI output devices | todo | USB/speaker device change tests |
 
@@ -62,8 +62,8 @@
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
 | ZP-301 | high | Scanner subprocess, JSONL IPC and bounded UI batches | implemented_unverified | Recursive scan fixture + no blocked-process orphan tests; verify cancellation/exit and responsiveness on Windows |
-| ZP-302 | high | Persist folders and playlists in SQLite with migrations | in_progress | Named playlist creation, update, delete and restore via background JSON session worker implemented and 46 Windows Rust tests passed; SQLite indexing/migrations still pending. |
-| ZP-303 | high | Virtualized searchable library, sorting and metadata tags | in_progress | Search by filename and page through 12 tracks at a time; mapping to correct queue index implemented. Sorting, metadata tags, index and load-time benchmarking pending. |
+| ZP-302 | high | Persist folders and playlists in SQLite with migrations | in_progress | Named playlists and 1-5 star ratings persist in backward-compatible session-v1.json; scrollable list implemented. SQLite indexes/migrations remain pending. |
+| ZP-303 | high | Virtualized searchable library, sorting and metadata tags | in_progress | Filename query, 12-track page, order/name asc/desc/folder/stars sort, selectable 0-5 user ratings, stable queue mapping and scroll views implemented. Tags/SQLite and UI stress testing pending. |
 | ZP-304 | medium | M3U/M3U8 import/export and proper track queue selection | implemented_unverified | M3U/M3U8 import/export, named queue playlists and session persistence. Windows tests passed in CI; manual UI behavior on user's PC not yet confirmed. |
 | ZP-305 | medium | Cover art thumbnail cache, library watch and duplicate detection | todo | Filesystem changes and memory ceiling |
 
@@ -105,7 +105,7 @@
 
 | ID | Priority | Task | Status | Acceptance / verification |
 | --- | --- | --- | --- | --- |
-| ZP-701 | high | Windows clean install/upgrade/uninstall/portable packaging | in_progress | Unsigned portable Windows x64 alpha created from run 38036361366 (46 Rust tests/scan smoke passed). Installer, clean update, MSVC/smart screen and Win10/11 validation pending. |
+| ZP-701 | high | Windows clean install/upgrade/uninstall/portable packaging | in_progress | Windows release CI with portable ZIP and SHA256 exists. New media key, playlist scroll, stars, sorting and fast EQ pan compiled/tested in CI; Win10/11 manual testing, installer and signing pending. |
 | ZP-702 | medium | Crash diagnostics, privacy-safe logging and repair tools | todo | Failure injection and recovery |
 | ZP-703 | blocker | 8-hour audio soak with scanning/EQ/downloads and user acceptance | todo | CPU/RAM/underruns and crash report |
 | ZP-704 | blocker | Signed public alpha/beta and licenses/third-party notices | todo | Release artifact/signature/checksum verification |
