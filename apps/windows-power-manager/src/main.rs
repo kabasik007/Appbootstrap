@@ -44,14 +44,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let weak = ui.as_weak();
     let control_thread = std::thread::spawn(move || {
         let mut plans = power::PowerPlans::default();
+        let mut slept_secondary = false;
         while let Ok(action) = rx.recv() {
             if matches!(action, Action::Quit) { break; }
             let result: Result<(String, Option<&'static str>), String> = match action {
-                Action::Normal => plans.normal().map(|s| (s, Some("Normal"))),
+                Action::Normal => {
+                    let result = plans.normal();
+                    if slept_secondary && displays::set_secondary_power(true).is_ok() {
+                        slept_secondary = false;
+                    }
+                    result.map(|s| (s, Some("Normal")))
+                },
                 Action::Eco => plans.apply(power::Mode::Eco).map(|s| (s, Some("Eco"))),
                 Action::Emergency => plans.apply(power::Mode::Emergency).map(|s| (s, Some("Emergency"))),
-                Action::SecondarySleep => displays::set_secondary_power(false).map(|s| (s, None)),
-                Action::SecondaryWake => displays::set_secondary_power(true).map(|s| (s, None)),
+                Action::SecondarySleep => {
+                    let result = displays::set_secondary_power(false);
+                    if result.is_ok() { slept_secondary = true; }
+                    result.map(|s| (s, None))
+                },
+                Action::SecondaryWake => {
+                    let result = displays::set_secondary_power(true);
+                    if result.is_ok() { slept_secondary = false; }
+                    result.map(|s| (s, None))
+                },
                 Action::Quit => unreachable!(),
             };
             let ui_weak = weak.clone();
@@ -69,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         // Drop of PowerPlans restores the original plan if our clone is still active.
         // DDC/CI restores secondary monitors on normal exit (best effort).
-        let _ = displays::set_secondary_power(true);
+        if slept_secondary { let _ = displays::set_secondary_power(true); }
     });
 
     let normal_tx = tx.clone(); let normal_ui = ui.as_weak();
