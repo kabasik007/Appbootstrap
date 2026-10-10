@@ -286,16 +286,16 @@ export component AppWindow inherits Window {
                                                 horizontal-stretch: 1;
                                                 spacing: 8px;
                                                 HorizontalLayout {
-                                                    Text { text: "GRAPHIC EQ / 15 OF 31 BANDS"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Text { text: "GRAPHIC EQ  /  ALL 31 FREQUENCIES"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
                                                     Rectangle { horizontal-stretch: 1; }
-                                                    Text { text: "Electronic preset · UI only"; color: #59beff; font-size: 12px; }
+                                                    Text { text: "31-BAND DSP  ·  LIVE CONTROLS"; color: #59beff; font-size: 12px; }
                                                 }
                                                 HorizontalLayout {
                                                     spacing: 4px;
                                                     alignment: center;
-                                                    for hz[i] in ["20","31","50","80","125","200","315","500","800","1.25k","2k","3.15k","5k","10k","20k"] : VerticalLayout {
-                                                        width: 36px;
-                                                        spacing: 6px;
+                                                    for hz[i] in ["20","25","31","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k","20k"] : VerticalLayout {
+                                                        width: 27px;
+                                                        spacing: 3px;
                                                         Slider {
                                                             orientation: vertical;
                                                             minimum: -12;
@@ -304,7 +304,7 @@ export component AppWindow inherits Window {
                                                             height: 132px;
                                                             changed(v) => { root.set-eq-band(i,v); }
                                                         }
-                                                        Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 12px; }
+                                                        Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
                                                     }
                                                 }
                                             }
