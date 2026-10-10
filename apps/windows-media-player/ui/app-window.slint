@@ -1,5 +1,5 @@
 
-import { Button, Slider, LineEdit } from "std-widgets.slint";
+import { Button, Slider, LineEdit, ScrollView } from "std-widgets.slint";
 
 component NavigationItem inherits Rectangle {
     in property <string> label;
@@ -290,21 +290,29 @@ export component AppWindow inherits Window {
                                                     Rectangle { horizontal-stretch: 1; }
                                                     Text { text: "31-BAND DSP  ·  LIVE CONTROLS"; color: #59beff; font-size: 12px; }
                                                 }
-                                                HorizontalLayout {
-                                                    spacing: 4px;
-                                                    alignment: center;
-                                                    for hz[i] in ["20","25","31","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k","20k"] : VerticalLayout {
-                                                        width: 27px;
-                                                        spacing: 3px;
-                                                        Slider {
-                                                            orientation: vertical;
-                                                            minimum: -12;
-                                                            maximum: 12;
-                                                            value: 0;
-                                                            height: 132px;
-                                                            changed(v) => { root.set-eq-band(i,v); }
+                                                ScrollView {
+                                                    height: 194px;
+                                                    horizontal-stretch: 1;
+                                                    content-width: 990px;
+                                                    content-height: 179px;
+                                                    horizontal-scrollbar-policy: as-needed;
+                                                    vertical-scrollbar-policy: always-off;
+                                                    HorizontalLayout {
+                                                        spacing: 4px;
+                                                        alignment: start;
+                                                        for hz[i] in ["20","25","31","40","50","63","80","100","125","160","200","250","315","400","500","630","800","1k","1.25k","1.6k","2k","2.5k","3.15k","4k","5k","6.3k","8k","10k","12.5k","16k","20k"] : VerticalLayout {
+                                                            width: 27px;
+                                                            spacing: 3px;
+                                                            Slider {
+                                                                orientation: vertical;
+                                                                minimum: -12;
+                                                                maximum: 12;
+                                                                value: 0;
+                                                                height: 132px;
+                                                                changed(v) => { root.set-eq-band(i,v); }
+                                                            }
+                                                            Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
                                                         }
-                                                        Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
                                                     }
                                                 }
                                             }
