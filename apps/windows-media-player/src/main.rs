@@ -109,6 +109,13 @@ fn refresh_library(library: &LibraryPresentation) {
     }
 }
 
+fn reset_track_progress(window: &slint::Weak<AppWindow>) {
+    if let Some(ui) = window.upgrade() {
+        ui.set_progress_percent(0.0);
+        ui.set_elapsed_text("00:00".into());
+    }
+}
+
 fn update_playlist_names(names: &[NamedPlaylist], model: &VecModel<SharedString>) {
     model.set_vec(names.iter().map(|p| SharedString::from(
         format!("♫ {} ({})", p.name, p.tracks.len()))).collect::<Vec<_>>());
@@ -260,6 +267,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let touched = user_touched_queue.clone();
     let dirty = session_dirty.clone();
     let lib = library.clone();
+    let reset_window = ui.as_weak();
     ui.on_open_file(move || {
         if let Some(path) = rfd::FileDialog::new()
             .add_filter("Audio", &["mp3","flac","wav","ogg","m4a","aac","opus"]).pick_file()
@@ -268,6 +276,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             dirty.set(true);
             q.borrow_mut().append_selected(path.clone());
             refresh_library(&lib);
+            reset_track_progress(&reset_window);
             let _ = cmd.send(Command::Open(path));
         }
     });
@@ -309,11 +318,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cmd = commands.clone();
     let dirty = session_dirty.clone();
     let lib = library.clone();
+    let reset_window = ui.as_weak();
     ui.on_play_library_track(move |index| {
         if index >= 0 {
             let actual = lib.view.borrow().visible.get(index as usize).copied();
             if let Some(path) = actual.and_then(|i| q.borrow_mut().select(i)) {
                 dirty.set(true);
+                reset_track_progress(&reset_window);
                 let _ = cmd.send(Command::Open(path));
             }
         }
@@ -321,18 +332,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let q = queue.clone();
     let cmd = commands.clone();
     let dirty = session_dirty.clone();
+    let reset_window = ui.as_weak();
     ui.on_next_track(move || {
         if let Some(path) = q.borrow_mut().next() {
             dirty.set(true);
+            reset_track_progress(&reset_window);
             let _ = cmd.send(Command::Open(path));
         }
     });
     let q = queue.clone();
     let cmd = commands.clone();
     let dirty = session_dirty.clone();
+    let reset_window = ui.as_weak();
     ui.on_previous_track(move || {
         if let Some(path) = q.borrow_mut().previous() {
             dirty.set(true);
+            reset_track_progress(&reset_window);
             let _ = cmd.send(Command::Open(path));
         }
     });
@@ -888,6 +903,8 @@ fn main() -> Result<(), Box<dyn Error>> {
                 pending_advance.set(true);
                 if let Some(path) = queue.borrow_mut().next() {
                     dirty_for_updates.set(true);
+                    window.set_progress_percent(0.0);
+                    window.set_elapsed_text("00:00".into());
                     let _ = commands.send(Command::Open(path));
                 }
             }
