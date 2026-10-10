@@ -280,11 +280,19 @@ export component AppWindow inherits Window {
                                             HorizontalLayout {
                                                 spacing: 5px;
                                                 alignment: center;
+                                                // Bottom-anchor each band: the spectrum grows UP
+                                                // instead of hanging downward from the top.
                                                 for bar in root.spectrum-bars : Rectangle {
                                                     width: 11px;
-                                                    height: 3px + bar * 1px;
-                                                    background: bar > 70 ? #28d9ff : #356aff;
-                                                    border-radius: 3px;
+                                                    height: 107px;
+                                                    background: transparent;
+                                                    Rectangle {
+                                                        width: parent.width;
+                                                        height: 3px + bar * 1px;
+                                                        y: parent.height - self.height;
+                                                        background: bar > 70 ? #28d9ff : #356aff;
+                                                        border-radius: 3px;
+                                                    }
                                                 }
                                             }
                                             HorizontalLayout {
