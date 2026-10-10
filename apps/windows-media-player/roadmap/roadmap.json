@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: Windows CI run 38036361366 succeeded: cargo check, 46 Rust unit tests, optimized EXE and subprocess scanner smoke. UA default, EN toggle, factory/custom EQ presets, named playlists and paged filename search included. Real user audio/UI testing, SQLite index and installer pending.",
+  "status_note": "2026-10-10: P5 downloader implementation started. Native Slint Downloads has yt-dlp/FFmpeg/Deno probe, MP3 / QHD 1440p MKV video+audio mux / playlists <=200, persisted single-job queue and cancel/retry. No real download verified; requires external tools, Windows CI and permitted test fixtures. YouTube Music API intentionally excluded.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -220,7 +220,7 @@
     {
       "id": "P5",
       "name": "Media downloader",
-      "status": "planned",
+      "status": "in_progress",
       "goal": "Optional yt-dlp jobs isolated from playback",
       "gate": "Authorized audio/video/playlist downloads, cancellation and error reporting verified",
       "tasks": [
@@ -228,29 +228,29 @@
           "id": "ZP-501",
           "title": "yt-dlp/FFmpeg/JS-runtime capability probes and tool integrity",
           "priority": "high",
-          "status": "todo",
-          "verification": "Pinned versions, licensing and missing-tool errors"
+          "status": "in_progress",
+          "verification": "Rust probes for yt-dlp, FFmpeg, Deno plus external executable discovery added; require Windows tool/version integration, licensing and checksum review."
         },
         {
           "id": "ZP-502",
           "title": "URL analysis, playlist selection and safe format presets",
           "priority": "high",
-          "status": "todo",
-          "verification": "Preview/choose on permitted fixtures"
+          "status": "in_progress",
+          "verification": "Safe fixed argument profiles MP3 320K, original audio, 1080/1440p MKV FFmpeg merge and playlist cap 200 coded; analysis preview and individual selection not implemented."
         },
         {
           "id": "ZP-503",
           "title": "Bounded persisted job queue, retry/cancel and progress IPC",
           "priority": "high",
-          "status": "todo",
-          "verification": "Interrupt/restart/download-with-music stress"
+          "status": "implemented_unverified",
+          "verification": "Background single-worker queue, progress, cancel/retry, disk-persisted job history and crash interruption behavior coded. Rust/Windows compiler test and live network simulation pending."
         },
         {
           "id": "ZP-504",
           "title": "Postprocess audio, sanitize destinations and auto-import completed files",
           "priority": "medium",
-          "status": "todo",
-          "verification": "File escaping, transcode and duplicate tests"
+          "status": "in_progress",
+          "verification": "FFmpeg postprocess through yt-dlp, destination control, output file reporting and audio library import coded; path stress and video library auto-import pending."
         }
       ]
     },
