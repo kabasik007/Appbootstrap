@@ -87,6 +87,7 @@ export component AppWindow inherits Window {
     callback toggle-download-preview(int);
     callback select-download-preview(bool);
     callback open-download-help;
+    callback invalidate-download-preview;
     in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
     in-out property <string> track-title: "Трек не вибрано";
     in-out property <bool> playing: false;
@@ -452,6 +453,7 @@ export component AppWindow inherits Window {
                                                         ? "Вставте посилання на дозволене відео або плейлист..."
                                                         : "Paste an authorized media or playlist URL...";
                                                     text <=> root.download-url;
+                                                    edited(text) => { root.invalidate-download-preview(); }
                                                 }
                                                 Button {
                                                     text: root.uk ? "Аналіз" : "Analyze";
@@ -485,7 +487,10 @@ export component AppWindow inherits Window {
                                                     text: root.download-playlist
                                                         ? (root.uk ? "☑ Увесь плейлист (до 200)" : "☑ Playlist (max 200)")
                                                         : (root.uk ? "☐ Одне відео" : "☐ Single video");
-                                                    clicked => { root.download-playlist = !root.download-playlist; }
+                                                    clicked => {
+                                                        root.download-playlist = !root.download-playlist;
+                                                        root.invalidate-download-preview();
+                                                    }
                                                 }
                                                 Rectangle { horizontal-stretch: 1; background: #12243e; }
                                             }
