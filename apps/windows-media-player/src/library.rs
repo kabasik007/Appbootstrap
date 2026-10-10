@@ -92,7 +92,7 @@ fn read_child(folder: PathBuf, serial: u64, generation: Arc<AtomicU64>, sender: 
     command.arg("--scan-worker").arg(folder)
         .stdin(Stdio::null()).stderr(Stdio::null()).stdout(Stdio::piped());
     #[cfg(windows)]
-    command.creation_flags(0x0000_4000); // BELOW_NORMAL_PRIORITY_CLASS
+    command.creation_flags(0x0800_4000); // CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS
 
     let mut child = match command.spawn() {
         Ok(child) => child,
