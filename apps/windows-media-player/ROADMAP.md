@@ -8,6 +8,8 @@
 >
 > **Next priority (strict order):** (1) Windows check/test/release EXE + Cargo.lock; (2) real MP3/FLAC/WAV listening and EQ smoke tests; (3) move decoding and coefficient design off real-time callback; (4) saved playlists/SQLite index; (5) live FFT; (6) separate yt-dlp downloader; (7) plugin API; (8) packaging.
 >
+> **Поточне доповнення:** усі 31 частотні регулятори DSP тепер відкриті в Slint зі скролом; додано `check_ui_contract.py`, timeout-cancel decoder, тест guard та збереження resolved `Cargo.lock` у Windows CI. Це код, **не пройдена збірка**. P1 ZP-103 і P2 ZP-203 залишаються *in_progress*: ще потрібні transport epochs, компактний режим/пресети та реальні Windows вимірювання.
+>
 ## Принципи порядку розробки
 
 Спершу отримати **стабільний локальний аудіоплеєр**, потім професійні DSP і візуалізації, а вже після цього — downloader та зовнішні плагіни. «Комбайн» не повинен ламати просту дію Play/Pause. Кожна фаза дає робочий і перевірний інкремент.
