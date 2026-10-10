@@ -116,10 +116,16 @@ enum Action {
     Queue { url: String, format: Format, playlist: bool, folder: PathBuf },
     Cancel(usize),
     Retry(usize),
+    ClearFinished,
     Probe,
     Shutdown,
 }
-enum Output { Progress(f32), File(PathBuf), Title(String), Error(String) }
+enum Output {
+    Progress(u64, f32),
+    File(u64, PathBuf),
+    Title(u64, String),
+    Error(u64, String),
+}
 struct Active {
     id: u64,
     child: Child,
@@ -151,6 +157,7 @@ impl Downloader {
     }
     pub fn cancel(&self, index: usize) { let _ = self.command.send(Action::Cancel(index)); }
     pub fn retry(&self, index: usize) { let _ = self.command.send(Action::Retry(index)); }
+    pub fn clear_finished(&self) { let _ = self.command.send(Action::ClearFinished); }
     pub fn probe(&self) { let _ = self.command.send(Action::Probe); }
     pub fn snapshot(&self) -> Snapshot {
         self.state.lock().unwrap_or_else(|e| e.into_inner()).clone()
@@ -327,23 +334,23 @@ fn arguments(job: &Job) -> Vec<String> {
 }
 
 fn spawn_reader<R: std::io::Read + Send + 'static>(
-    input: R, tx: SyncSender<Output>,
+    input: R, id: u64, tx: SyncSender<Output>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         for line in BufReader::new(input).lines() {
             let Ok(line) = line else { break; };
             if let Some(raw) = line.strip_prefix("ZILLA_PROGRESS:") {
                 if let Some(percent) = parse_progress(raw) {
-                    let _ = tx.try_send(Output::Progress(percent));
+                    let _ = tx.try_send(Output::Progress(id, percent));
                 }
             } else if let Some(raw) = line.strip_prefix("ZILLA_TITLE:") {
-                let _ = tx.try_send(Output::Title(raw.chars().take(100).collect()));
+                let _ = tx.try_send(Output::Title(id, raw.chars().take(100).collect()));
             } else if let Some(raw) = line.strip_prefix("ZILLA_FILE:") {
                 // File notifications are infrequent and must not be lost.
-                let _ = tx.try_send(Output::File(PathBuf::from(raw)));
+                let _ = tx.try_send(Output::File(id, PathBuf::from(raw)));
             } else if line.to_ascii_lowercase().contains("error:") {
                 let detail = line.chars().take(MAX_LOG).collect::<String>();
-                let _ = tx.try_send(Output::Error(detail));
+                let _ = tx.try_send(Output::Error(id, detail));
             }
         }
     })
@@ -385,10 +392,10 @@ fn launch(job: &Job, sender: SyncSender<Output>) -> Result<Active, String> {
     let mut child = cmd.spawn().map_err(|e|format!("Не вдалося запустити yt-dlp: {e}"))?;
     let mut readers = Vec::new();
     if let Some(stdout) = child.stdout.take() {
-        readers.push(spawn_reader(stdout, sender.clone()));
+        readers.push(spawn_reader(stdout, job.id, sender.clone()));
     }
     if let Some(stderr) = child.stderr.take() {
-        readers.push(spawn_reader(stderr, sender));
+        readers.push(spawn_reader(stderr, job.id, sender));
     }
     Ok(Active { id:job.id,child,readers,started:Instant::now(),cancelled:false })
 }
@@ -470,28 +477,34 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                     }
                 }
             }
+            Ok(Action::ClearFinished) => {
+                let before = jobs.len();
+                jobs.retain(|j|matches!(j.phase,Phase::Queued|Phase::Running));
+                if jobs.len()!=before { dirty=true; }
+                info=format!("Очищено {} завершених завдань", before-jobs.len());
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
         // Drain bounded stdout/stderr events. No user input blocks on output pipes.
         for _ in 0..256 {
             match updates.try_recv() {
-                Ok(Output::Progress(progress)) => {
-                    if let Some(task)=current.as_ref() {
-                        if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
+                Ok(Output::Progress(id, progress)) => {
+                    if current.as_ref().is_some_and(|task|task.id==id) {
+                        if let Some(job)=jobs.iter_mut().find(|x|x.id==id) {
                             job.progress=progress;dirty=true;
                         }
                     }
                 }
-                Ok(Output::Title(title)) => {
-                    if let Some(task)=current.as_ref() {
-                        if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
+                Ok(Output::Title(id, title)) => {
+                    if current.as_ref().is_some_and(|task|task.id==id) {
+                        if let Some(job)=jobs.iter_mut().find(|x|x.id==id) {
                             job.detail=title;dirty=true;
                         }
                     }
                 }
-                Ok(Output::File(path)) => {
-                    if let Some(task)=current.as_ref() {
-                        if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
+                Ok(Output::File(id, path)) => {
+                    if current.as_ref().is_some_and(|task|task.id==id) {
+                        if let Some(job)=jobs.iter_mut().find(|x|x.id==id) {
                             // yt-dlp --print after_move returns output after FFmpeg.
                             if job.format.is_audio() &&
                                 path.is_file() && path.starts_with(&job.folder) {
@@ -500,9 +513,9 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                         }
                     }
                 }
-                Ok(Output::Error(detail)) => {
-                    if let Some(task)=current.as_ref() {
-                        if let Some(job)=jobs.iter_mut().find(|x|x.id==task.id) {
+                Ok(Output::Error(id, detail)) => {
+                    if current.as_ref().is_some_and(|task|task.id==id) {
+                        if let Some(job)=jobs.iter_mut().find(|x|x.id==id) {
                             job.detail=detail;dirty=true;
                         }
                     }
@@ -520,7 +533,8 @@ fn supervise(actions: Receiver<Action>, state: Arc<Mutex<Snapshot>>) {
                 let _=process.child.wait();
                 for reader in process.readers.drain(..) { let _=reader.join(); }
                 for event in updates.try_iter() {
-                    if let Output::File(path)=event {
+                    if let Output::File(event_id, path)=event {
+                        if event_id!=id { continue; }
                         if let Some(job)=jobs.iter().find(|x|x.id==id) {
                             if job.format.is_audio() && path.is_file() && path.starts_with(&job.folder) {
                                 files.push(path);
