@@ -267,8 +267,8 @@ impl EqProcessor {
 pub struct EqSource<S:Source<Item=f32>> { source:S, processor:EqProcessor }
 impl<S:Source<Item=f32>> EqSource<S> {
     pub fn new(source:S, controls:Arc<EqControls>) -> Self {
-        let rate=source.sample_rate().get();
-        let channels=source.channels().get() as usize;
+        let rate=source.sample_rate();
+        let channels=source.channels() as usize;
         Self {source,processor:EqProcessor::new(rate,channels,controls)}
     }
 }
