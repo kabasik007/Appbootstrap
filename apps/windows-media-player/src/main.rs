@@ -7,6 +7,8 @@ mod dsp;
 mod downloader;
 mod download_analysis;
 mod library;
+mod library_sort;
+#[cfg(windows)] mod media_keys;
 mod playback;
 mod pcm_ring;
 mod playlist;
@@ -18,6 +20,8 @@ mod visualizer;
 
 use audio::{start_audio_worker, AudioController, Command};
 use library::{LibraryScanner, ScanEvent};
+use library_sort::{filtered_order, next_rating, rating, SortBy, TrackRating};
+use std::collections::HashMap;
 use downloader::{Downloader, Format};
 use download_analysis::{Preview, spawn_preview, row_title};
 use playback::{format_duration, Transport};
@@ -59,37 +63,44 @@ fn save_playlist_job(path: PathBuf, tracks: Vec<PathBuf>, replies: Sender<Playli
 const EQ_BAND_COUNT: usize = 31;
 const LIBRARY_PAGE_SIZE: usize = 12;
 
-#[derive(Default)]
 struct LibraryView {
     query: String,
     page: usize,
     visible: Vec<usize>,
+    sort: SortBy,
+}
+
+impl Default for LibraryView {
+    fn default() -> Self {
+        Self { query: String::new(), page: 0, visible: Vec::new(), sort: SortBy::Queue }
+    }
 }
 
 struct LibraryPresentation {
     queue: Rc<RefCell<PlayQueue>>,
     rows: Rc<VecModel<SharedString>>,
+    rating_rows: Rc<VecModel<SharedString>>,
+    ratings: Rc<RefCell<HashMap<PathBuf,u8>>>,
     view: RefCell<LibraryView>,
     window: slint::Weak<AppWindow>,
 }
 
 fn refresh_library(library: &LibraryPresentation) {
     let entries = library.queue.borrow().snapshot();
+    let ratings = library.ratings.borrow();
     let mut view = library.view.borrow_mut();
-    let query = view.query.trim().to_lowercase();
-    let matches: Vec<usize> = entries.iter().enumerate()
-        .filter_map(|(i, path)| {
-            if query.is_empty() || path.file_name().unwrap_or_default()
-                .to_string_lossy().to_lowercase().contains(&query) { Some(i) } else { None }
-        }).collect();
+    let matches = filtered_order(&entries, &ratings, &view.query, view.sort);
     let pages = matches.len().saturating_sub(1) / LIBRARY_PAGE_SIZE + 1;
     view.page = view.page.min(pages - 1);
     let start = view.page * LIBRARY_PAGE_SIZE;
     view.visible = matches.iter().skip(start).take(LIBRARY_PAGE_SIZE).copied().collect();
-    let filenames: Vec<SharedString> = view.visible.iter()
-        .map(|i| SharedString::from(entries[*i].file_name().unwrap_or_default()
-            .to_string_lossy().as_ref())).collect();
-    library.rows.set_vec(filenames);
+    library.rows.set_vec(view.visible.iter().map(|i| {
+        SharedString::from(entries[*i].file_name().unwrap_or_default()
+            .to_string_lossy().as_ref())
+    }).collect::<Vec<_>>());
+    library.rating_rows.set_vec(view.visible.iter().map(|i| {
+        SharedString::from(format!("★ {}/5",rating(&ratings,&entries[*i])))
+    }).collect::<Vec<_>>());
     if let Some(window) = library.window.upgrade() {
         window.set_library_page_info(format!("{}/{} · {}",
             view.page+1, pages, matches.len()).into());
@@ -106,12 +117,22 @@ fn update_playlist_names(names: &[NamedPlaylist], model: &VecModel<SharedString>
 fn session_snapshot(
     queue: &PlayQueue, playlists: &[NamedPlaylist],
     all_presets: &[EqPreset], current_eq: &EqPreset,
+    ratings: &HashMap<PathBuf, u8>,
 ) -> SavedSession {
     SavedSession {
         tracks: queue.snapshot(), selected: queue.selected_index(),
         playlists: playlists.to_vec(),
         presets: all_presets.iter().skip(presets::factory().len()).cloned().collect(),
         last_eq: current_eq.clone(),
+        track_ratings: {
+            let mut entries = ratings.iter().filter_map(|(p,stars)| {
+                (1..=5).contains(stars).then_some(TrackRating {
+                    path: p.clone(), stars: *stars,
+                })
+            }).collect::<Vec<_>>();
+            entries.sort_by(|a,b| a.path.cmp(&b.path));
+            entries
+        },
     }
 }
 
@@ -167,8 +188,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let queue = Rc::new(RefCell::new(PlayQueue::default()));
     let model: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
     ui.set_library_items(model.clone().into());
+    let ratings: Rc<RefCell<HashMap<PathBuf,u8>>> = Rc::new(RefCell::new(HashMap::new()));
+    let rating_rows: Rc<VecModel<SharedString>> = Rc::new(VecModel::default());
+    ui.set_library_ratings(rating_rows.clone().into());
+    let ratings_touched = Rc::new(Cell::new(false));
     let library = Rc::new(LibraryPresentation {
         queue: Rc::clone(&queue), rows: Rc::clone(&model),
+        rating_rows: rating_rows.clone(), ratings: ratings.clone(),
         view: RefCell::new(LibraryView::default()), window: ui.as_weak(),
     });
     refresh_library(&library);
@@ -419,6 +445,28 @@ fn main() -> Result<(), Box<dyn Error>> {
         refresh_library(&lib);
     });
     let lib = library.clone();
+    ui.on_sort_library(move |sort| {
+        let mut view = lib.view.borrow_mut();
+        view.sort = SortBy::from_index(sort);
+        view.page = 0;
+        drop(view);
+        refresh_library(&lib);
+    });
+    let lib = library.clone();
+    let dirty = session_dirty.clone();
+    let touched = ratings_touched.clone();
+    ui.on_rate_library_track(move |index| {
+        if index < 0 { return; }
+        let actual = lib.view.borrow().visible.get(index as usize).copied();
+        let path = actual.and_then(|i| lib.queue.borrow().snapshot().get(i).cloned());
+        if let Some(path) = path {
+            next_rating(&mut lib.ratings.borrow_mut(), path);
+            touched.set(true);
+            dirty.set(true);
+            refresh_library(&lib);
+        }
+    });
+    let lib = library.clone();
     ui.on_library_page(move |direction| {
         {
             let mut view = lib.view.borrow_mut();
@@ -652,6 +700,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let session_shutdown_queue = Rc::clone(&queue);
     let persist_playlists = named_playlists.clone();
     let persist_presets = all_presets.clone();
+    let persist_ratings = ratings.clone();
+    let restore_ratings_touched = ratings_touched.clone();
     let persist_eq = current_eq.clone();
     let restore_eq_touched = touched_eq.clone();
     let restore_eq_bands = eq_values.clone();
@@ -742,6 +792,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         if let Some(loaded) = session_for_updates.poll_loaded() {
             match loaded {
                 Ok(state) => {
+                    if !restore_ratings_touched.get() {
+                        persist_ratings.replace(state.track_ratings.into_iter()
+                            .map(|r| (r.path,r.stars)).collect());
+                    }
                     persist_playlists.replace(state.playlists);
                     update_playlist_names(&persist_playlists.borrow(), &restore_playlist_model);
                     restore_selected.set(None);
@@ -841,7 +895,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         if dirty_for_updates.replace(false) {
             let snapshot = session_snapshot(
                 &queue.borrow(), &persist_playlists.borrow(),
-                &persist_presets.borrow(), &persist_eq.borrow()
+                &persist_presets.borrow(), &persist_eq.borrow(), &persist_ratings.borrow()
             );
             session_for_updates.enqueue_save(snapshot);
         }
@@ -854,7 +908,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Flush the latest state and join I/O worker before exiting.
     let final_snapshot = session_snapshot(
         &session_shutdown_queue.borrow(), &named_playlists.borrow(),
-        &all_presets.borrow(), &current_eq.borrow()
+        &all_presets.borrow(), &current_eq.borrow(), &ratings.borrow()
     );
     session.shutdown(final_snapshot);
     Ok(())
