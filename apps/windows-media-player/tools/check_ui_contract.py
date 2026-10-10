@@ -56,7 +56,7 @@ if "Command::SetEqBand(index as usize, db)" not in APP:
     raise SystemExit("Slint-to-DSP direct band mapping is absent")
 if 'changed(v) => { root.set-eq-band(i,v); }' not in UI:
     raise SystemExit("Slint sliders are not wired to DSP callback")
-if "GRAPHIC EQ  /  ALL 31 FREQUENCIES" not in UI:
-    raise SystemExit("UI heading doesn't reflect full EQ")
+if "GRAPHIC EQ / 31 BANDS" not in UI or "ЕКВАЛАЙЗЕР / 31 СМУГА" not in UI:
+    raise SystemExit("UA/EN UI headings must reflect all 31 bands")
 
 print("OK: 31 Slint sliders match DSP BAND_HZ, and each is connected to Rust")
