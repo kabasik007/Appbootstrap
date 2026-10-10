@@ -54,8 +54,12 @@ if "const EQ_BAND_COUNT: usize = 31;" not in APP:
     raise SystemExit("Rust UI mapping doesn't allow all 31 bands")
 if "Command::SetEqBand(index as usize, db)" not in APP:
     raise SystemExit("Slint-to-DSP direct band mapping is absent")
-if 'changed(v) => { root.set-eq-band(i,v); }' not in UI:
-    raise SystemExit("Slint sliders are not wired to DSP callback")
+if 'changed(v) => { root.set-eq-band(i,12 - v); }' not in UI:
+    raise SystemExit("Slint EQ sliders must invert UI coordinates, without inverting DSP")
+if 'value: 12 - root.eq-bands[i];' not in UI:
+    raise SystemExit("EQ slider value must render +12 dB at top and -12 dB at bottom")
+if 'y: parent.height - self.height;' not in UI:
+    raise SystemExit("FFT spectrum bars must grow upwards from the bottom")
 if "GRAPHIC EQ / 31 BANDS" not in UI or "ЕКВАЛАЙЗЕР / 31 СМУГА" not in UI:
     raise SystemExit("UA/EN UI headings must reflect all 31 bands")
 
