@@ -58,13 +58,13 @@ jobs:
           Copy-Item "README_DOWNLOADS_UA.txt" (Join-Path $destination "README_DOWNLOADS_UA.txt")
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content -Path (Join-Path $destination "SHA256SUMS.txt") -Value "$hash  zillaplayer.exe"
-          Compress-Archive -Path $destination -DestinationPath (Join-Path $PWD "portable/ZillaPlayer-v0.3.1-alpha.1-Windows-x64.zip") -Force
+          Compress-Archive -Path $destination -DestinationPath (Join-Path $PWD "portable/ZillaPlayer-v0.4.0-alpha.1-Windows-x64.zip") -Force
       - name: Upload unsigned portable alpha
         uses: actions/upload-artifact@v4
         with:
-          name: zillaplayer-v0.3.1-alpha.1-windows-x64
+          name: zillaplayer-v0.4.0-alpha.1-windows-x64
           path: |
-            apps/windows-media-player/portable/ZillaPlayer-v0.3.1-alpha.1-Windows-x64.zip
+            apps/windows-media-player/portable/ZillaPlayer-v0.4.0-alpha.1-Windows-x64.zip
             apps/windows-media-player/target/release/zillaplayer.exe
           if-no-files-found: error
           retention-days: 14
@@ -103,7 +103,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: zillaplayer-v0.3.1-alpha.1-windows-x64
+          name: zillaplayer-v0.4.0-alpha.1-windows-x64
           path: release
       - name: Publish checked Windows alpha ZIP as GitHub Prerelease
         shell: bash
@@ -111,15 +111,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag="zillaplayer-v0.3.1-alpha.1"
-          asset="release/portable/ZillaPlayer-v0.3.1-alpha.1-Windows-x64.zip"
+          tag="zillaplayer-v0.4.0-alpha.1"
+          asset="release/portable/ZillaPlayer-v0.4.0-alpha.1-Windows-x64.zip"
           test -s "$asset"
           if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Release $tag already exists. Refusing to replace published binaries."
             exit 1
           fi
           cat > release-notes.md <<'NOTES'
-          ZillaPlayer 0.3.1 Alpha 1 — Windows 10/11 x64 (unsigned portable build)
+          ZillaPlayer 0.4.0 Alpha 1 — Windows 10/11 x64 (unsigned portable build)
 
           Includes:
           - Ukrainian-first interface, local library and named playlists.
@@ -131,17 +131,20 @@ jobs:
           - Faster horizontal EQ pan (380 px jump controls), scrollable queue and playlists.
           - Filename, rating, folder sorting; user-set 0–5 star ratings persisted between launches.
           - Best-effort global multimedia keyboard keys Play/Pause, Next, Previous and Stop (Windows).
+          - New Zilla Studio: 24-key virtual MIDI piano (C4-B5), four independent synth timbres, live 4-channel mixer with pan/mute/master.
+          - Built-in 40–240 BPM practice metronome and C-major scale lesson with feedback and score.
+          - Procedural Rust synthesizer on a dedicated worker; no hardware MIDI keyboard or full DAW sequencer yet.
 
           Install:
           1. Download the attached ZIP, extract it and run ZillaPlayer/zillaplayer.exe.
           2. To test downloads, separately install trusted yt-dlp and FFmpeg; Deno can help for some YouTube sources. Setup instructions are inside the ZIP.
           3. Only download media you own or are permitted to save; no DRM bypass.
 
-          This is a test alpha, not a signed/stable production release. Hardware audio and live-source downloading need real-world testing.
+          This is a test alpha, not a signed/stable production release. Studio sound on Windows speakers and simultaneous playback require real-world testing.
           NOTES
           gh release create "$tag" "$asset" \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
-            --title "ZillaPlayer v0.3.1 Alpha 1 — Windows x64" \
+            --title "ZillaPlayer v0.4.0 Alpha 1 — Windows x64" \
             --notes-file release-notes.md \
             --prerelease
