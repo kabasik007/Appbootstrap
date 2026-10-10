@@ -35,6 +35,10 @@ jobs:
         run: python tools/roadmap_sync.py --check
       - name: Validate full EQ UI contract
         run: python tools/check_ui_contract.py
+      - name: Show Rust toolchain and target
+        run: |
+          rustc -vV
+          cargo -V
       - name: Check project
         run: cargo check
       - name: Run Rust tests
@@ -56,6 +60,14 @@ jobs:
           if ($decoded.Count -ne 2) { throw "expected 2 media files, got $($decoded.Count)" }
           if (-not ($decoded | Where-Object { $_ -like "*alpha.MP3" })) { throw "missing MP3" }
           if (-not ($decoded | Where-Object { $_ -like "*beta.flac" })) { throw "missing FLAC" }
+      - name: Upload resolved Cargo.lock for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zillaplayer-resolved-cargo-lock
+          path: apps/windows-media-player/Cargo.lock
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload unsigned development build
         uses: actions/upload-artifact@v4
         with:
