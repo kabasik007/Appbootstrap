@@ -1,6 +1,12 @@
 //! Lightweight library presentation ordering. Never mutates playback queue.
 use std::{cmp::Ordering, collections::HashMap, path::{Path, PathBuf}};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrackRating {
+    pub path: PathBuf,
+    pub stars: u8,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortBy { Queue, NameAsc, NameDesc, HighestRated, Folder }
 impl SortBy {
