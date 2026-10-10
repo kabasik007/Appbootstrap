@@ -268,19 +268,53 @@ fn load_jobs(path: &Path) -> Vec<Job> {
             })
         }).collect()
 }
-fn executable(name: &str) -> PathBuf {
+fn candidate_locations(name: &str, executable_dir: Option<&Path>) -> Vec<PathBuf> {
     #[cfg(windows)]
     let bin = format!("{name}.exe");
     #[cfg(not(windows))]
     let bin = name.to_string();
-    if let Ok(exe) = std::env::current_exe() {
-        for folder in [exe.parent().map(Path::to_path_buf),
-                       exe.parent().map(|x| x.join("tools"))].into_iter().flatten() {
-            let possible = folder.join(&bin);
-            if possible.is_file() { return possible; }
+    let mut choices = Vec::new();
+    if let Some(dir) = executable_dir {
+        choices.extend([
+            dir.join(&bin),
+            dir.join("tools").join(&bin),
+            dir.join("tools").join(name).join(&bin),
+            dir.join("tools").join("ffmpeg").join("bin").join(&bin),
+        ]);
+    }
+    #[cfg(windows)]
+    {
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            let local = PathBuf::from(local);
+            choices.push(local.join("Microsoft").join("WinGet").join("Links").join(&bin));
+            choices.push(local.join("Programs").join(name).join(&bin));
+            if name == "deno" {
+                choices.push(local.join("deno").join(&bin));
+            }
+        }
+        if let Some(user) = std::env::var_os("USERPROFILE") {
+            let user = PathBuf::from(user);
+            if name == "deno" {
+                choices.push(user.join(".deno").join("bin").join(&bin));
+            }
         }
     }
-    PathBuf::from(bin)
+    if let Some(paths) = std::env::var_os("PATH") {
+        choices.extend(std::env::split_paths(&paths).map(|p| p.join(&bin)));
+    }
+    choices
+}
+fn executable(name: &str) -> PathBuf {
+    let exe_dir = std::env::current_exe().ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf));
+    candidate_locations(name, exe_dir.as_deref()).into_iter()
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| {
+            #[cfg(windows)]
+            { PathBuf::from(format!("{name}.exe")) }
+            #[cfg(not(windows))]
+            { PathBuf::from(name) }
+        })
 }
 fn probe_tool(name: &str) -> bool {
     ProcessCommand::new(executable(name))
@@ -292,10 +326,12 @@ fn probes() -> String {
     let yt = probe_tool("yt-dlp");
     let ff = probe_tool("ffmpeg");
     let deno = probe_tool("deno");
+    // Deno is an optional runtime for some modern extractors, not a general
+    // precondition for queueing downloads.
     format!("yt-dlp: {}  •  FFmpeg: {}  •  Deno: {}",
         if yt{"OK"}else{"НЕ ЗНАЙДЕНО"},
         if ff{"OK"}else{"НЕ ЗНАЙДЕНО"},
-        if deno{"OK"}else{"НЕ ЗНАЙДЕНО"})
+        if deno{"OK (необов’язково)"}else{"НЕ ЗНАЙДЕНО (необов’язково)"})
 }
 
 /// Fixed command vector. No shell, cookies, arbitrary user args or local files.
@@ -311,6 +347,13 @@ fn arguments(job: &Job) -> Vec<String> {
     ].into_iter().map(str::to_string).collect::<Vec<_>>();
     args.push("--paths".into());
     args.push(job.folder.to_string_lossy().to_string());
+    // yt-dlp cannot locate a bundled FFmpeg merely because our own probe can.
+    // Pass its verified exact executable location when it is outside PATH.
+    let ffmpeg = executable("ffmpeg");
+    if ffmpeg.is_file() {
+        args.push("--ffmpeg-location".into());
+        args.push(ffmpeg.to_string_lossy().to_string());
+    }
     if job.playlist {
         args.extend(["--yes-playlist", "--playlist-end", "200"].map(str::to_string));
     } else {
@@ -593,6 +636,22 @@ mod tests {
             format,playlist,folder:PathBuf::from("C:/Downloads"),
             phase:Phase::Queued,progress:0.,detail:String::new()}
     }
+    #[test]
+    fn bundled_tool_lookup_includes_exe_and_tools_folder() {
+        let root = PathBuf::from("C:/Program Files/ZillaPlayer");
+        let paths = candidate_locations("yt-dlp", Some(&root));
+        #[cfg(windows)]
+        {
+            assert_eq!(paths[0], root.join("yt-dlp.exe"));
+            assert_eq!(paths[1], root.join("tools/yt-dlp.exe"));
+        }
+        #[cfg(not(windows))]
+        {
+            assert_eq!(paths[0], root.join("yt-dlp"));
+            assert_eq!(paths[1], root.join("tools/yt-dlp"));
+        }
+    }
+
     #[test]
     fn validate_input_and_reject_option_injection() {
         assert!(validate_url("https://example.org/watch?v=1").is_ok());
