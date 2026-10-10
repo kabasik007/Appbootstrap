@@ -1,0 +1,19 @@
+[package]
+name = "zilla-power-manager"
+version = "0.1.0"
+edition = "2021"
+description = "Windows UPS power saving manager for a LiFePO4-backed desktop"
+publish = false
+
+[dependencies]
+slint = "1.12"
+sysinfo = "0.33"
+regex = "1.11"
+
+[build-dependencies]
+slint-build = "1.12"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

@@ -1,0 +1,133 @@
+import { Button, Slider } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "Zilla Power Manager — UPS";
+    width: 880px;
+    height: 670px;
+    min-width: 760px;
+    min-height: 600px;
+    background: #0d1522;
+    default-font-family: "Segoe UI";
+
+    in-out property <int> soc: 78;
+    in-out property <int> watts: 300;
+    in property <string> soc-text: "78%";
+    in property <string> watts-text: "300 W";
+    in property <string> runtime-text: "—";
+    in property <string> cpu-text: "CPU: —";
+    in property <string> ram-text: "RAM: —";
+    in property <string> plan-text: "Normal";
+    in property <string> status-text: "Готово. До JK BMS потужність і SOC вводяться вручну.";
+
+    callback settings-changed();
+    callback normal-requested();
+    callback eco-requested();
+    callback emergency-requested();
+    callback secondary-sleep-requested();
+    callback secondary-wake-requested();
+
+    VerticalLayout {
+        padding: 22px;
+        spacing: 14px;
+
+        Text { text: "ZILLA  POWER MANAGER"; font-size: 25px; font-weight: 800; color: #e6f1ff; }
+        Text { text: "KEMOT PROsinus • LiFePO4 4S / 334 Ah • Windows / Rust"; font-size: 13px; color: #90a9c4; }
+        HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                background: #182537; border-radius: 12px;
+                VerticalLayout {
+                    padding: 15px; spacing: 6px;
+                    Text { text: "ЗАРЯД (РУЧНИЙ)"; color: #90a9c4; font-size: 12px; }
+                    Text { text: root.soc-text; color: #42e3a1; font-size: 32px; font-weight: 700; }
+                }
+            }
+            Rectangle {
+                background: #182537; border-radius: 12px;
+                VerticalLayout {
+                    padding: 15px; spacing: 6px;
+                    Text { text: "230 В (ОЦІНКА)"; color: #90a9c4; font-size: 12px; }
+                    Text { text: root.watts-text; color: #f1f6ff; font-size: 32px; font-weight: 700; }
+                }
+            }
+            Rectangle {
+                background: #18312f; border-radius: 12px;
+                VerticalLayout {
+                    padding: 15px; spacing: 6px;
+                    Text { text: "ДО РЕЗЕРВУ 10%"; color: #a6d5c9; font-size: 12px; }
+                    Text { text: root.runtime-text; color: #42e3a1; font-size: 25px; font-weight: 700; }
+                }
+            }
+        }
+        Rectangle {
+            background: #182537; border-radius: 12px;
+            VerticalLayout {
+                padding: 14px; spacing: 10px;
+                Text { text: "Калькулятор автономності"; color: #e6f1ff; font-size: 17px; font-weight: 600; }
+                HorizontalLayout {
+                    Text { text: "Заряд LiFePO4"; color: #c4d5e7; font-size: 13px; }
+                    Slider {
+                        minimum: 0; maximum: 100; value: root.soc;
+                        changed => { root.soc = self.value as int; root.settings-changed(); }
+                    }
+                }
+                HorizontalLayout {
+                    Text { text: "Навантаження ПК + монітори"; color: #c4d5e7; font-size: 13px; }
+                    Slider {
+                        minimum: 100; maximum: 1000; value: root.watts;
+                        changed => { root.watts = self.value as int; root.settings-changed(); }
+                    }
+                }
+                Text {
+                    text: "12.8 В × 334 А·год; припущення: ККД 85%, холостий хід 15 Вт. Не замінює ватметр чи JK BMS.";
+                    font-size: 11px; color: #8ca6bc; wrap: word-wrap;
+                }
+            }
+        }
+        HorizontalLayout {
+            spacing: 12px;
+            Rectangle {
+                background: #182537; border-radius: 12px;
+                VerticalLayout {
+                    padding: 15px; spacing: 8px;
+                    Text { text: "ЖИВІ ДАНІ WINDOWS"; color: #90a9c4; font-size: 12px; }
+                    Text { text: root.cpu-text; color: #e6f1ff; font-size: 18px; }
+                    Text { text: root.ram-text; color: #c4d5e7; font-size: 14px; }
+                }
+            }
+            Rectangle {
+                background: #182537; border-radius: 12px;
+                VerticalLayout {
+                    padding: 15px; spacing: 8px;
+                    Text { text: "АКТИВНИЙ РЕЖИМ"; color: #90a9c4; font-size: 12px; }
+                    Text { text: root.plan-text; color: #42e3a1; font-size: 19px; }
+                    Text { text: "CPU, екран, HDD: клон плану Windows"; color: #c4d5e7; font-size: 12px; }
+                }
+            }
+        }
+        Text { text: "ПРОФІЛІ ЖИВЛЕННЯ"; color: #90a9c4; font-size: 12px; font-weight: 700; }
+        HorizontalLayout {
+            spacing: 10px;
+            Button { text: "Normal"; clicked => { root.normal-requested(); } }
+            Button { text: "Eco / CPU 65%"; clicked => { root.eco-requested(); } }
+            Button { text: "Emergency / CPU 40%"; clicked => { root.emergency-requested(); } }
+        }
+        Text { text: "ДРУГОРЯДНІ МОНІТОРИ (DDC/CI, основний не змінюємо)"; color: #90a9c4; font-size: 12px; font-weight: 700; }
+        HorizontalLayout {
+            spacing: 10px;
+            Button { text: "Приспати додаткові"; clicked => { root.secondary-sleep-requested(); } }
+            Button { text: "Розбудити додаткові"; clicked => { root.secondary-wake-requested(); } }
+        }
+        Rectangle {
+            background: #152637; border-radius: 8px;
+            VerticalLayout {
+                padding: 12px;
+                Text { text: root.status-text; color: #c5dfef; font-size: 13px; wrap: word-wrap; }
+            }
+        }
+        Text {
+            text: "Увага: DDC/CI залежить від монітора; деякі екрани прокидаються лише фізичною кнопкою. JK BMS BLE — у наступному етапі.";
+            color: #839ab3; font-size: 11px; wrap: word-wrap;
+        }
+    }
+}
