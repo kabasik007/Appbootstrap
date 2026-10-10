@@ -24,6 +24,9 @@ jobs:
         working-directory: apps/windows-media-player
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Use the exact branch head, not GitHub's synthetic PR merge commit.
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -90,8 +93,10 @@ jobs:
           retention-days: 14
 
   publish-alpha:
-    # Publishing is opt-in via a dedicated commit message, never on PRs.
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-alpha]')
+    # GitHub App commits run the PR workflow here. Only the same-repo
+    # ZillaPlayer branch may publish; fork PRs cannot obtain write tokens.
+    # A version-specific tag is immutable: existing releases are never replaced.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'apps/windows-media-player'
     needs: windows-check
     runs-on: ubuntu-latest
     permissions:
@@ -133,7 +138,7 @@ jobs:
           NOTES
           gh release create "$tag" "$asset" \
             --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
+            --target "${{ github.event.pull_request.head.sha }}" \
             --title "ZillaPlayer v0.3.0 Alpha 1 — Windows x64" \
             --notes-file release-notes.md \
             --prerelease
