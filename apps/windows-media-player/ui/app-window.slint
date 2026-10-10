@@ -798,11 +798,11 @@ export component AppWindow inherits Window {
                                                     spacing: 2px;
                                                     for pitch[i] in [60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83] : Rectangle {
                                                         width: 44px;
-                                                        height: (pitch % 12 == 1 || pitch % 12 == 3 ||
-                                                                 pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? 117px : 162px;
+                                                        height: (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                                 Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? 117px : 162px;
                                                         background: root.studio-last-note == pitch ? #4dcfff :
-                                                            (pitch % 12 == 1 || pitch % 12 == 3 ||
-                                                             pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? #182537 : #e2edf9;
+                                                            (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                             Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? #182537 : #e2edf9;
                                                         border-radius: 6px;
                                                         VerticalLayout {
                                                             padding: 4px;
@@ -810,8 +810,8 @@ export component AppWindow inherits Window {
                                                             Rectangle { vertical-stretch: 1; background: transparent; }
                                                             Text {
                                                                 text: root.studio-note-labels[i];
-                                                                color: (pitch % 12 == 1 || pitch % 12 == 3 ||
-                                                                        pitch % 12 == 6 || pitch % 12 == 8 || pitch % 12 == 10) ? #9dd7ff : #19304e;
+                                                                color: (Math.mod(pitch, 12) == 1 || Math.mod(pitch, 12) == 3 ||
+                                                                        Math.mod(pitch, 12) == 6 || Math.mod(pitch, 12) == 8 || Math.mod(pitch, 12) == 10) ? #9dd7ff : #19304e;
                                                                 horizontal-alignment: center;
                                                                 font-size: 12px;
                                                                 font-weight: 700;
