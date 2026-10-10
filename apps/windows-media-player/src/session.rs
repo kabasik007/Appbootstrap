@@ -3,6 +3,7 @@
 //! or the Rodio output callback. This is an interim v1 session format;
 //! the full searchable library will later migrate to SQLite.
 use crate::presets::{self, EqPreset};
+use crate::library_sort::TrackRating;
 use std::{
     cell::RefCell,
     fs,
@@ -27,12 +28,14 @@ pub struct SavedSession {
     pub playlists: Vec<NamedPlaylist>,
     pub presets: Vec<EqPreset>,
     pub last_eq: EqPreset,
+    pub track_ratings: Vec<TrackRating>,
 }
 impl Default for SavedSession {
     fn default() -> Self {
         Self {
             tracks: Vec::new(), selected: None, playlists: Vec::new(),
             presets: Vec::new(), last_eq: EqPreset::flat(),
+            track_ratings: Vec::new(),
         }
     }
 }
@@ -52,6 +55,8 @@ impl SavedSession {
         self.presets.truncate(24);
         self.presets = self.presets.into_iter().map(EqPreset::sanitize).collect();
         self.last_eq = self.last_eq.sanitize();
+        self.track_ratings.truncate(MAX_TRACKS);
+        self.track_ratings.retain(|entry| entry.stars >= 1 && entry.stars <= 5);
         self
     }
 }
@@ -180,7 +185,14 @@ fn read_one(path: &Path) -> io::Result<Option<SavedSession>> {
         .unwrap_or_default();
     let last_eq = value.get("last_eq").and_then(presets::from_json)
         .unwrap_or_else(EqPreset::flat);
-    Ok(Some(SavedSession { tracks, selected, playlists, presets, last_eq }.sanitized()))
+    let track_ratings = value.get("track_ratings").and_then(|v|v.as_array())
+        .map(|entries| entries.iter().take(MAX_TRACKS).filter_map(|entry| {
+            let path = PathBuf::from(entry.get("path")?.as_str()?);
+            let stars = u8::try_from(entry.get("stars")?.as_u64()?).ok()?;
+            if path.as_os_str().is_empty() || !(1..=5).contains(&stars) { return None; }
+            Some(TrackRating { path, stars })
+        }).collect()).unwrap_or_default();
+    Ok(Some(SavedSession { tracks, selected, playlists, presets, last_eq, track_ratings }.sanitized()))
 }
 
 fn write_to(path: &Path, snapshot: &SavedSession) -> io::Result<()> {
@@ -196,6 +208,9 @@ fn write_to(path: &Path, snapshot: &SavedSession) -> io::Result<()> {
         })).collect::<Vec<_>>(),
         "presets": snapshot.presets.iter().map(presets::to_json).collect::<Vec<_>>(),
         "last_eq": presets::to_json(&snapshot.last_eq),
+        "track_ratings": snapshot.track_ratings.iter().map(|r| serde_json::json!({
+            "path": r.path.to_string_lossy(), "stars": r.stars
+        })).collect::<Vec<_>>(),
     });
     let payload = serde_json::to_vec(&value).map_err(io::Error::other)?;
     if payload.len() as u64 > MAX_BYTES {
@@ -308,12 +323,16 @@ mod tests {
             }],
             presets: vec![crate::presets::factory()[3].clone()],
             last_eq: crate::presets::factory()[4].clone(),
+            track_ratings: vec![TrackRating {
+                path: PathBuf::from("one.flac"), stars: 4,
+            }],
         };
         write_to(&path, &stored).unwrap();
         let recovered = read_from(&path).unwrap();
         assert_eq!(recovered.playlists, stored.playlists);
         assert_eq!(recovered.presets, stored.presets);
         assert_eq!(recovered.last_eq, stored.last_eq);
+        assert_eq!(recovered.track_ratings, stored.track_ratings);
         fs::remove_file(path).unwrap();
     }
 
@@ -325,6 +344,7 @@ mod tests {
         assert_eq!(restored.tracks.len(), 1);
         assert!(restored.playlists.is_empty());
         assert!(restored.presets.is_empty());
+        assert!(restored.track_ratings.is_empty());
         fs::remove_file(path).unwrap();
     }
 
