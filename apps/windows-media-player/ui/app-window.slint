@@ -44,14 +44,32 @@ component TrackLine inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "ZillaPlayer — native Windows UI prototype";
+    title: "ZillaPlayer — Windows Alpha 0.2";
     width: 1510px;
     height: 920px;
     background: #07101e;
 
     in-out property <string> active-page: "Player";
-    in-out property <string> notice: "Open a local MP3, FLAC, WAV, OGG or M4A file";
-    in-out property <string> track-title: "No track loaded";
+    in-out property <bool> uk: true;
+    in-out property <string> library-query: "";
+    in-out property <string> new-playlist-name: "";
+    in-out property <string> custom-preset-name: "";
+    in-out property <string> active-playlist-name: "";
+    in-out property <string> library-page-info: "";
+    in-out property <[float]> eq-bands: [];
+    in-out property <float> eq-preamp: -6;
+    in property <[string]> preset-names: [];
+    in property <[string]> playlist-names: [];
+    callback apply-eq-preset(int);
+    callback save-eq-preset(string);
+    callback search-library(string);
+    callback library-page(int);
+    callback create-playlist(string);
+    callback load-playlist(int);
+    callback save-active-playlist;
+    callback delete-active-playlist;
+    in-out property <string> notice: "Відкрийте MP3, FLAC, WAV, OGG або M4A";
+    in-out property <string> track-title: "Трек не вибрано";
     in-out property <bool> playing: false;
     in-out property <bool> has-track: false;
     in-out property <float> progress-percent: 0;
@@ -78,7 +96,7 @@ export component AppWindow inherits Window {
     callback set-loudness(bool);
     callback enable-eq(bool);
     in-out property <[string]> library-items: [];
-    in-out property <string> library-count: "0 tracks";
+    in-out property <string> library-count: "0 треків";
     in property <[string]> roadmap-items: [];
     in property <[string]> focus-tasks: [];
     in property <string> roadmap-summary: "Loading roadmap...";
@@ -104,12 +122,12 @@ export component AppWindow inherits Window {
                         Text { text: "RUST  /  WINDOWS  /  P0"; color: #36a8ff; font-size: 10px; }
                     }
                 }
-                NavigationItem { label: "▶   Player"; selected: root.active-page == "Player"; activated => { root.active-page = "Player"; } }
-                NavigationItem { label: "♫   Library"; selected: root.active-page == "Library"; activated => { root.active-page = "Library"; } }
-                NavigationItem { label: "↓   Downloads"; selected: root.active-page == "Downloads"; activated => { root.active-page = "Downloads"; } }
-                NavigationItem { label: "☑   Tasks"; selected: root.active-page == "Tasks"; activated => { root.active-page = "Tasks"; } }
-                NavigationItem { label: "◇   Plans"; selected: root.active-page == "Plans"; activated => { root.active-page = "Plans"; } }
-                NavigationItem { label: "⚙   Settings"; selected: root.active-page == "Settings"; activated => { root.active-page = "Settings"; } }
+                NavigationItem { label: root.uk ? "▶   Плеєр" : "▶   Player"; selected: root.active-page == "Player"; activated => { root.active-page = "Player"; } }
+                NavigationItem { label: root.uk ? "♫   Бібліотека" : "♫   Library"; selected: root.active-page == "Library"; activated => { root.active-page = "Library"; } }
+                NavigationItem { label: root.uk ? "↓   Завантаження" : "↓   Downloads"; selected: root.active-page == "Downloads"; activated => { root.active-page = "Downloads"; } }
+                NavigationItem { label: root.uk ? "☑   Задачі" : "☑   Tasks"; selected: root.active-page == "Tasks"; activated => { root.active-page = "Tasks"; } }
+                NavigationItem { label: root.uk ? "◇   Плани" : "◇   Plans"; selected: root.active-page == "Plans"; activated => { root.active-page = "Plans"; } }
+                NavigationItem { label: root.uk ? "⚙   Налаштування" : "⚙   Settings"; selected: root.active-page == "Settings"; activated => { root.active-page = "Settings"; } }
                 Rectangle { vertical-stretch: 1; background: #0b1525; }
                 Rectangle {
                     height: 170px;
@@ -147,7 +165,14 @@ export component AppWindow inherits Window {
                                         padding-left: 18px;
                                         padding-right: 14px;
                                         spacing: 16px;
-                                        Text { text: "⌕   Search music, artists, downloads..."; color: #809abb; vertical-alignment: center; horizontal-stretch: 1; font-size: 16px; }
+                                        LineEdit {
+                                            horizontal-stretch: 1;
+                                            placeholder-text: root.uk ? "Пошук музики..." : "Search music...";
+                                            text <=> root.library-query;
+                                            edited(text) => { root.search-library(text); }
+                                        }
+                                        Button { text: root.uk ? "Бібліотека" : "Library"; clicked => { root.active-page = "Library"; root.search-library(root.library-query); } }
+                                        Button { text: root.uk ? "EN" : "UA"; clicked => { root.uk = !root.uk; } }
                                         Text { text: "♫  Windows Audio"; color: #43caff; vertical-alignment: center; font-size: 14px; }
                                         Text { text: "●"; color: #00cfb7; vertical-alignment: center; font-size: 18px; }
                                     }
@@ -178,15 +203,15 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 padding: 18px;
                                                 spacing: 12px;
-                                                Text { text: "LOCAL AUDIO   ·   NATIVE WINDOWS OUTPUT"; color: #40baff; font-size: 12px; }
+                                                Text { text: root.uk ? "ЛОКАЛЬНЕ АУДІО · WINDOWS" : "LOCAL AUDIO · WINDOWS"; color: #40baff; font-size: 12px; }
                                                 Text { text: root.track-title; color: #ffffff; font-size: 29px; font-weight: 700; overflow: elide; }
-                                                Text { text: "LOCAL MEDIA  •  file opened from disk"; color: #a8c6e8; font-size: 16px; }
+                                                Text { text: root.uk ? "МУЗИКА З ДИСКА" : "LOCAL MEDIA · file opened from disk"; color: #a8c6e8; font-size: 16px; }
                                                 HorizontalLayout {
                                                     spacing: 8px;
-                                                    Button { text: "Open File"; clicked => { root.open-file(); } }
-                                                    Button { text: "Folder"; clicked => { root.open-folder(); } }
-                                                    Button { text: root.playing ? "❚❚ Pause" : "▶ Play"; enabled: root.has-track; clicked => { root.toggle-play(); } }
-                                                    Button { text: "■ Stop"; enabled: root.has-track; clicked => { root.stop-playback(); } }
+                                                    Button { text: root.uk ? "Файл" : "Open File"; clicked => { root.open-file(); } }
+                                                    Button { text: root.uk ? "Папка" : "Folder"; clicked => { root.open-folder(); } }
+                                                    Button { text: root.playing ? (root.uk ? "❚❚ Пауза" : "❚❚ Pause") : (root.uk ? "▶ Грати" : "▶ Play"); enabled: root.has-track; clicked => { root.toggle-play(); } }
+                                                    Button { text: root.uk ? "■ Стоп" : "■ Stop"; enabled: root.has-track; clicked => { root.stop-playback(); } }
                                                     Button { text: "◀"; clicked => { root.previous-track(); } }
                                                     Button { text: "▶"; clicked => { root.next-track(); } }
                                                     Rectangle { horizontal-stretch: 1; background: #102039; }
@@ -214,9 +239,9 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 padding: 12px;
                                                 spacing: 7px;
-                                                Text { text: "PLAYLIST  /  " + root.library-count; color: #f2f7ff; font-size: 15px; font-weight: 700; }
+                                                Text { text: (root.uk ? "ЧЕРГА / " : "PLAYLIST / ") + root.library-count; color: #f2f7ff; font-size: 15px; font-weight: 700; }
                                                 for file[i] in root.library-items : TrackLine {
-                                                    number: "♫"; title: file; artist: "Local audio";
+                                                    number: "♫"; title: file; artist: root.uk ? "Локальне аудіо" : "Local audio";
                                                     visible: i < 4;
                                                     activated => { root.play-library-track(i); }
                                                 }
@@ -231,7 +256,7 @@ export component AppWindow inherits Window {
                                             padding: 14px;
                                             spacing: 10px;
                                             HorizontalLayout {
-                                                Text { text: "LIVE FFT SPECTRUM  ·  32 LOG FREQUENCY BANDS"; color: #d7ecff; font-size: 14px; }
+                                                Text { text: root.uk ? "ЖИВИЙ СПЕКТР · 32 СМУГИ" : "LIVE FFT SPECTRUM · 32 BANDS"; color: #d7ecff; font-size: 14px; }
                                                 Rectangle { horizontal-stretch: 1; }
                                                 Text { text: "RustFFT  /  20 FPS UI  /  isolated worker"; color: #55aaff; font-size: 12px; }
                                             }
@@ -248,7 +273,7 @@ export component AppWindow inherits Window {
                                             HorizontalLayout {
                                                 height: 16px;
                                                 spacing: 10px;
-                                                Text { text: "LIVE PEAK"; width: 82px; font-size: 12px; color: #5dcaff; }
+                                                Text { text: root.uk ? "РІВЕНЬ" : "LIVE PEAK"; width: 82px; font-size: 12px; color: #5dcaff; }
                                                 Rectangle {
                                                     height: 11px;
                                                     horizontal-stretch: 1;
@@ -276,15 +301,39 @@ export component AppWindow inherits Window {
                                                 horizontal-stretch: 1;
                                                 spacing: 8px;
                                                 HorizontalLayout {
-                                                    Text { text: "GRAPHIC EQ  /  ALL 31 FREQUENCIES"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
+                                                    Text { text: root.uk ? "ЕКВАЛАЙЗЕР / 31 СМУГА" : "GRAPHIC EQ / 31 BANDS"; color: #eaf4ff; font-size: 15px; font-weight: 700; }
                                                     Rectangle { horizontal-stretch: 1; }
-                                                    Text { text: "31-BAND DSP  ·  LIVE CONTROLS"; color: #59beff; font-size: 12px; }
+                                                    Text { text: root.uk ? "ПРЕСЕТИ ТА КЕРУВАННЯ" : "PRESETS & LIVE DSP"; color: #59beff; font-size: 12px; }
+                                                }
+                                                HorizontalLayout {
+                                                    spacing: 5px;
+                                                    ScrollView {
+                                                        height: 40px;
+                                                        horizontal-stretch: 1;
+                                                        content-width: 1600px;
+                                                        content-height: 34px;
+                                                        horizontal-scrollbar-policy: as-needed;
+                                                        vertical-scrollbar-policy: always-off;
+                                                        HorizontalLayout {
+                                                            spacing: 6px;
+                                                            for preset[i] in root.preset-names : Button {
+                                                                text: preset;
+                                                                clicked => { root.apply-eq-preset(i); }
+                                                            }
+                                                        }
+                                                    }
+                                                    LineEdit {
+                                                        width: 132px;
+                                                        placeholder-text: root.uk ? "Назва пресету" : "Preset name";
+                                                        text <=> root.custom-preset-name;
+                                                    }
+                                                    Button { text: root.uk ? "Зберегти" : "Save"; clicked => { root.save-eq-preset(root.custom-preset-name); } }
                                                 }
                                                 ScrollView {
-                                                    height: 194px;
+                                                    height: 154px;
                                                     horizontal-stretch: 1;
                                                     content-width: 990px;
-                                                    content-height: 179px;
+                                                    content-height: 153px;
                                                     horizontal-scrollbar-policy: as-needed;
                                                     vertical-scrollbar-policy: always-off;
                                                     HorizontalLayout {
@@ -297,8 +346,8 @@ export component AppWindow inherits Window {
                                                                 orientation: vertical;
                                                                 minimum: -12;
                                                                 maximum: 12;
-                                                                value: 0;
-                                                                height: 132px;
+                                                                value: root.eq-bands[i];
+                                                                height: 110px;
                                                                 changed(v) => { root.set-eq-band(i,v); }
                                                             }
                                                             Text { text: hz; color: #a9c3e5; horizontal-alignment: center; font-size: 10px; }
@@ -310,25 +359,25 @@ export component AppWindow inherits Window {
                                             VerticalLayout {
                                                 width: 190px;
                                                 spacing: 10px;
-                                                Text { text: "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
-                                                Text { text: "Preamp / Headroom"; color: #9ab7d5; font-size: 12px; }
-                                                Slider { minimum: -18; maximum: 6; value: -6; changed(v) => { root.set-preamp(v); } }
-                                                Text { text: "Master Volume"; color: #9ab7d5; font-size: 12px; }
+                                                Text { text: root.uk ? "КЕРУВАННЯ ЗВУКОМ" : "OUTPUT CONTROL"; color: #dcecff; font-size: 14px; }
+                                                Text { text: root.uk ? "Попереднє підсилення" : "Preamp / Headroom"; color: #9ab7d5; font-size: 12px; }
+                                                Slider { minimum: -18; maximum: 6; value: root.eq-preamp; changed(v) => { root.set-preamp(v); } }
+                                                Text { text: root.uk ? "Гучність" : "Master Volume"; color: #9ab7d5; font-size: 12px; }
                                                 Slider {
                                                     minimum: 0;
                                                     maximum: 100;
                                                     value: root.volume-percent;
                                                     changed(percent) => { root.set-volume(percent); }
                                                 }
-                                                Text { text: "Bass"; color: #9ab7d5; font-size: 12px; }
+                                                Text { text: root.uk ? "Бас" : "Bass"; color: #9ab7d5; font-size: 12px; }
                                                 Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-bass(v); } }
-                                                Text { text: "Treble / Tone"; color: #9ab7d5; font-size: 12px; }
+                                                Text { text: root.uk ? "Високі / Тембр" : "Treble / Tone"; color: #9ab7d5; font-size: 12px; }
                                                 Slider { minimum: -12; maximum: 12; value: 0; changed(v) => { root.set-treble(v); } }
-                                                Button { text: root.loudness-enabled ? "Loud: ON" : "Loud: OFF"; clicked => {
+                                                Button { text: root.loudness-enabled ? (root.uk ? "Лауднес: ТАК" : "Loud: ON") : (root.uk ? "Лауднес: НІ" : "Loud: OFF"); clicked => {
                                                     root.loudness-enabled = !root.loudness-enabled;
                                                     root.set-loudness(root.loudness-enabled);
                                                 } }
-                                                Button { text: root.equalizer-enabled ? "EQ: ON" : "EQ: BYPASS"; clicked => {
+                                                Button { text: root.equalizer-enabled ? (root.uk ? "EQ: ТАК" : "EQ: ON") : (root.uk ? "EQ: ОБХІД" : "EQ: BYPASS"); clicked => {
                                                     root.equalizer-enabled = !root.equalizer-enabled;
                                                     root.enable-eq(root.equalizer-enabled);
                                                 } }
@@ -338,7 +387,7 @@ export component AppWindow inherits Window {
                                 }
                                 if root.active-page == "Downloads" : VerticalLayout {
                                     spacing: 14px;
-                                    Text { text: "Downloads"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: (root.uk ? "Завантаження" : "Downloads"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
                                     Text { text: "Media URLs, formats, playlists and jobs · UI preview"; color: #9ab4d2; font-size: 16px; }
                                     HorizontalLayout {
                                         spacing: 10px;
@@ -396,7 +445,7 @@ export component AppWindow inherits Window {
                                 }
                                 if root.active-page == "Tasks" : VerticalLayout {
                                     spacing: 14px;
-                                    Text { text: "Engineering Tasks"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: (root.uk ? "Задачі розробки" : "Engineering Tasks"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
                                     Text { text: "Read-only engineering backlog · bundled roadmap/roadmap.json"; color: #9ab4d2; font-size: 15px; }
                                     HorizontalLayout {
                                         spacing: 12px;
@@ -428,7 +477,7 @@ export component AppWindow inherits Window {
                                 }
                                 if root.active-page == "Plans" : VerticalLayout {
                                     spacing: 14px;
-                                    Text { text: "Product Roadmap"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: (root.uk ? "План розробки" : "Product Roadmap"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
                                     Text { text: root.roadmap-summary + " · no fabricated progress percentages"; color: #99b6d8; font-size: 16px; }
                                     HorizontalLayout {
                                         spacing: 12px;
@@ -463,31 +512,60 @@ export component AppWindow inherits Window {
                                 }
                                 if root.active-page == "Library" : VerticalLayout {
                                     spacing: 15px;
-                                    Text { text: "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "Folder scan in a separate child process; playback stays responsive"; color: #91b1d5; font-size: 17px; }
+                                    Text { text: root.uk ? "Музична бібліотека" : "Music Library"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: root.uk ? "Сканування у фоновому процесі — музика не зупиняється" : "Background scan keeps playback responsive"; color: #91b1d5; font-size: 17px; }
                                     HorizontalLayout {
                                         spacing: 10px;
-                                        Button { text: "Scan Folder"; clicked => { root.open-folder(); } }
-                                        Button { text: "Import M3U / M3U8"; clicked => { root.import-playlist(); } }
-                                        Button { text: "Save M3U8"; clicked => { root.export-playlist(); } }
+                                        Button { text: root.uk ? "Сканувати папку" : "Scan Folder"; clicked => { root.open-folder(); } }
+                                        Button { text: root.uk ? "Імпорт M3U" : "Import M3U"; clicked => { root.import-playlist(); } }
+                                        Button { text: root.uk ? "Експорт M3U8" : "Export M3U8"; clicked => { root.export-playlist(); } }
                                         Rectangle { horizontal-stretch: 1; background: #080f1c; }
                                     }
-                                    Text { text: root.library-count + " indexed (first 10 shown)"; color: #4dc1ff; font-size: 15px; }
-                                    Rectangle {
-                                        vertical-stretch: 1; background: #102039; border-radius: 12px;
-                                        VerticalLayout {
-                                            padding: 16px; spacing: 5px;
-                                            for file[i] in root.library-items : TrackLine {
-                                                number: "♫"; title: file; artist: "Click to play";
-                                                activated => { root.play-library-track(i); }
+                                    HorizontalLayout {
+                                        spacing: 9px;
+                                        Text { text: root.library-count; color: #4dc1ff; font-size: 16px; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        Button { text: root.uk ? "◀ Назад" : "◀ Prev"; clicked => { root.library-page(-1); } }
+                                        Text { text: root.library-page-info; color: #b9d8f5; vertical-alignment: center; }
+                                        Button { text: root.uk ? "Далі ▶" : "Next ▶"; clicked => { root.library-page(1); } }
+                                    }
+                                    HorizontalLayout {
+                                        spacing: 12px;
+                                        Rectangle {
+                                            width: 292px; background: #102039; border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px; spacing: 9px;
+                                                Text { text: root.uk ? "МОЇ ПЛЕЙЛИСТИ" : "MY PLAYLISTS"; font-size: 17px; font-weight: 700; color: #eaf4ff; }
+                                                LineEdit { placeholder-text: root.uk ? "Назва нового списку" : "New playlist name"; text <=> root.new-playlist-name; }
+                                                Button { text: root.uk ? "+ Створити з черги" : "+ Create from queue"; clicked => { root.create-playlist(root.new-playlist-name); } }
+                                                Text { text: (root.uk ? "Вибрано: " : "Selected: ") + root.active-playlist-name; color: #64beff; font-size: 12px; }
+                                                for name[i] in root.playlist-names : Button {
+                                                    text: name; clicked => { root.load-playlist(i); }
+                                                }
+                                                Rectangle { vertical-stretch: 1; background: #102039; }
+                                                Button { text: root.uk ? "Зберегти поточну чергу" : "Save current queue"; clicked => { root.save-active-playlist(); } }
+                                                Button { text: root.uk ? "Видалити вибраний" : "Delete selected"; clicked => { root.delete-active-playlist(); } }
+                                            }
+                                        }
+                                        Rectangle {
+                                            horizontal-stretch: 1; background: #102039; border-radius: 12px;
+                                            VerticalLayout {
+                                                padding: 12px; spacing: 6px;
+                                                Text { text: root.uk ? "ТРЕКИ · натисніть для відтворення" : "TRACKS · click to play"; color: #4dc1ff; font-size: 14px; }
+                                                for file[i] in root.library-items : TrackLine {
+                                                    number: "" + (i + 1); title: file;
+                                                    artist: root.uk ? "Відтворити" : "Play";
+                                                    activated => { root.play-library-track(i); }
+                                                }
+                                                Rectangle { vertical-stretch: 1; background: #102039; }
                                             }
                                         }
                                     }
                                 }
                                 if root.active-page == "Settings" : VerticalLayout {
                                     spacing: 15px;
-                                    Text { text: "Settings"; color: #f4f8ff; font-size: 31px; font-weight: 700; }
-                                    Text { text: "Audio devices, themes, downloads and plugins will appear here."; color: #91b1d5; font-size: 17px; }
+                                    Text { text: (root.uk ? "Налаштування" : "Settings"); color: #f4f8ff; font-size: 31px; font-weight: 700; }
+                                    Text { text: root.uk ? "Аудіопристрої, теми та плагіни з’являться пізніше." : "Audio devices, themes, downloads and plugins will appear here."; color: #91b1d5; font-size: 17px; }
                                     Rectangle { vertical-stretch: 1; background: #102039; border-radius: 12px; }
                                 }
                                 Rectangle {
