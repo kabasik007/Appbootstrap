@@ -49,7 +49,7 @@ fn save_playlist_job(path: PathBuf, tracks: Vec<PathBuf>, replies: Sender<Playli
         });
 }
 
-const EQ_VISIBLE_MAP: [usize; 15] = [0,2,4,6,8,10,12,14,16,18,20,22,24,27,30];
+const EQ_BAND_COUNT: usize = 31;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Scanner mode is the SAME executable in a separate process with no GUI or audio.
@@ -214,10 +214,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cmd = commands.clone();
     ui.on_set_eq_band(move |index, db| {
-        if index >= 0 {
-            if let Some(real_band) = EQ_VISIBLE_MAP.get(index as usize) {
-                let _ = cmd.send(Command::SetEqBand(*real_band,db));
-            }
+        if index >= 0 && (index as usize) < EQ_BAND_COUNT {
+            let _ = cmd.send(Command::SetEqBand(index as usize, db));
         }
     });
     let cmd = commands.clone();
