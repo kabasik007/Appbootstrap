@@ -31,6 +31,7 @@ No disk read, decoder call or blocking wait occurs in `BufferedPcmSource::next()
 - Consumer: one Rodio source, reads only preallocated atomic sample slots.
 - Memory: requested ring size is two seconds of interleaved samples, rounded to a power of two and clamped to 4,096–1,048,576 samples (maximum ~4 MiB of sample storage per active track).
 - The audio control thread waits for a bounded metadata response (up to four seconds) and at most 350 ms for prebuffering. This **never blocks the Slint UI thread**, but opening a slow file can delay a new transport command.
+- A `CancelOnFailure` guard marks the decoder setup as canceled if those limits fail or if initialization exits early; a late worker checks the token before producing PCM. A blocked OS file-open operation may still need OS-level recovery, so this is not a guarantee of an instantaneous thread kill.
 - Open/restart/seek create a new decoder generation; old ring is explicitly canceled after successful track replacement. Drops cancel their decoder. The reader flushes naturally by abandoning the canceled buffer, not by manipulating ring indices concurrently.
 - Paused playback may fill the ring; the producer then waits with bounded sleeps. This is on its own worker only.
 - Current prebuffer target is 100 ms; actual startup and underrun behavior need measurements.
