@@ -2,7 +2,7 @@
   "schema_version": 1,
   "product": "ZillaPlayer",
   "as_of": "2026-10-10",
-  "status_note": "2026-10-10: v0.1 live FFT analyzer with bounded loss-tolerant PCM tap, dedicated RustFFT worker and atomic 32-band Slint display committed; no Windows executable or test pass has been independently confirmed.",
+  "status_note": "2026-10-10: P1 decoder-open cancellation guard, full 31-slider GUI and CI mapping validator committed. Windows cargo build and audible playback still unverified; no claimed performance metrics.",
   "statuses": {
     "todo": "Planned",
     "in_progress": "In progress",
@@ -23,7 +23,7 @@
           "title": "Resolve Windows Rust/Slint/Rodio build and commit Cargo.lock",
           "priority": "blocker",
           "status": "todo",
-          "verification": "Rodio 0.21 Decoder<BufReader<File>> type corrected against upstream API; need passing cargo check/test/release and committed Cargo.lock"
+          "verification": "GitHub Windows CI configured for cargo check/test/release, scanner smoke and EQ contract. Toolchain unavailable locally; must obtain actual passing run and commit Cargo.lock."
         },
         {
           "id": "ZP-002",
@@ -73,8 +73,8 @@
           "id": "ZP-103",
           "title": "Coalesced transport commands and cancellation generations",
           "priority": "high",
-          "status": "todo",
-          "verification": "Stress with rapid seeks and track switching"
+          "status": "in_progress",
+          "verification": "Adjacent Seek command coalescing exists; timeout/failed decoder setup now has cancellation guard. Need transport epochs, superseded seek cancellation and Windows rapid-switch stress."
         },
         {
           "id": "ZP-104",
@@ -117,8 +117,8 @@
           "id": "ZP-203",
           "title": "Complete editable 31-band GUI and 10-band compact preset view",
           "priority": "high",
-          "status": "todo",
-          "verification": "All bands adjustable, presets restored"
+          "status": "in_progress",
+          "verification": "All 31 graphic EQ sliders now directly mapped to DSP, frequencies checked by dependency-free CI validator; compact 10-band preset view and saved presets still pending."
         },
         {
           "id": "ZP-204",
