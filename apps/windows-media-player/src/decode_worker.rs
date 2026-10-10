@@ -72,8 +72,8 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
                 }
                 let channels = decoder.channels();
                 let sample_rate = decoder.sample_rate();
-                let requested = (sample_rate.get() as usize)
-                    .saturating_mul(channels.get() as usize).saturating_mul(2);
+                let requested = (sample_rate as usize)
+                    .saturating_mul(channels as usize).saturating_mul(2);
                 let ring = PcmRing::new(requested);
                 Ok((decoder, TrackInfo { ring, channels, sample_rate, duration }))
             })();
@@ -110,8 +110,8 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
     // Prime the buffer (about 100 ms) before attaching source to the mixer.
     // If slow disks take longer, the audio callback emits bounded silence,
     // never waits for storage/decoder locks.
-    let prebuffer = (info.sample_rate.get() as usize)
-        .saturating_mul(info.channels.get() as usize) / 10;
+    let prebuffer = (info.sample_rate as usize)
+        .saturating_mul(info.channels as usize) / 10;
     let deadline = Instant::now() + PREBUFFER_WAIT;
     while info.ring.available() < prebuffer &&
         !info.ring.is_drained() && !info.ring.is_canceled() &&
@@ -122,7 +122,7 @@ pub fn prepare(path: PathBuf, position: Duration, spectrum: Arc<Spectrum>) -> Re
 
     // We have a usable source; further cancellation is owned by its PCM ring.
     timeout_guard.committed = true;
-    let visual_tap = visualizer::attach(spectrum, info.sample_rate.get(), info.channels.get());
+    let visual_tap = visualizer::attach(spectrum, info.sample_rate, info.channels);
     let cancel = Arc::clone(&info.ring);
     let duration = info.duration;
     Ok(PreparedAudio {
@@ -200,15 +200,14 @@ impl Drop for BufferedPcmSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::num::{NonZeroU16, NonZeroU32};
 
     #[test]
     fn buffer_underrun_is_silence_until_true_eof() {
         let ring = PcmRing::new(4096);
         let mut source = BufferedPcmSource {
             ring: Arc::clone(&ring),
-            channels: NonZeroU16::new(2).unwrap(),
-            sample_rate: NonZeroU32::new(44_100).unwrap(),
+            channels: 2,
+            sample_rate: 44_100,
             duration: Some(Duration::from_secs(10)),
             underflow_samples: 0,
             analysis_samples: 0,
@@ -253,8 +252,8 @@ mod tests {
 
         let mut prepared = prepare(path.clone(), Duration::ZERO, Spectrum::new())
             .expect("generated WAV should be accepted by the decoder");
-        assert_eq!(prepared.source.channels.get(), 1);
-        assert_eq!(prepared.source.sample_rate.get(), 44_100);
+        assert_eq!(prepared.source.channels, 1);
+        assert_eq!(prepared.source.sample_rate, 44_100);
         let mut heard_signal = false;
         for _ in 0..3_000 {
             if let Some(sample) = prepared.source.next() {
@@ -272,8 +271,8 @@ mod tests {
         for _ in 0..1024 { ring.try_push(0.65).unwrap(); }
         let mut source = BufferedPcmSource {
             ring: Arc::clone(&ring),
-            channels: NonZeroU16::new(2).unwrap(),
-            sample_rate: NonZeroU32::new(44_100).unwrap(),
+            channels: 2,
+            sample_rate: 44_100,
             duration: None,
             underflow_samples: 0,
             analysis_samples: 0,
@@ -315,8 +314,8 @@ mod tests {
         {
             let _source = BufferedPcmSource {
                 ring: Arc::clone(&ring),
-                channels: NonZeroU16::new(2).unwrap(),
-                sample_rate: NonZeroU32::new(48_000).unwrap(),
+                channels: 2,
+                sample_rate: 48_000,
                 duration: None,
                 underflow_samples: 0,
                 analysis_samples: 0,
