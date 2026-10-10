@@ -10,6 +10,9 @@
 - Buffered audio source consumes PCM without decoding, disk I/O, sleeps, mutexes or allocation in its `next()` method.
 - Prebuffer at startup, explicit cancellation when stopping/switching tracks, EOF semantics and starvation counters.
 - Raised-cosine volume ramps and 31-band Biquad EQ with bass/treble/loudness/preamp/bypass. Coefficients are calculated in control worker and published through atomic revisioned snapshots.
+- **All 31 graphic EQ controls** are wired directly to Rust DSP indexes (20 Hz–20 kHz), with horizontally scrollable controls for narrower windows. The compact 10-band preset mode remains unfinished.
+- Decode-worker `prepare()` now marks a cancellation token when metadata/open/prebuffer preparation fails or times out; this prevents a detached producer from running indefinitely after the caller gives up, except while an underlying OS file open is still blocked.
+- The Windows workflow runs `tools/check_ui_contract.py`, prints compiler versions and retains resolved `Cargo.lock` for later dependency review.
 - Library scanner is a separate supervised, lower-priority child process with JSONL IPC, bounded batches, cancel/kill/reap and shutdown joining.
 - Up to 50k paths held in an in-memory queue, M3U/M3U8 import/export on background workers and first-ten preview.
 - Versioned P0–P7 roadmap (34 tasks) shown in Plans and Tasks from one JSON file; source-only code never appears as verified.
