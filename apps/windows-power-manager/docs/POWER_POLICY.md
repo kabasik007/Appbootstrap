@@ -1,14 +1,26 @@
-# Power policy, version 0.1
+# Power policy v0.1.1 — no automatic Windows sleep
 
-Normal: restore user-selected Windows power scheme. No CPU cap, disk or display timeout forced by this app.
-Eco: CPU maximum processor state 65%, screen inactivity timeout 120 s, HDD standby timeout 120 s.
-Emergency: CPU maximum processor state 40%, screen inactivity timeout 60 s, HDD standby timeout 60 s.
+Normal: restore the original user-selected Windows power scheme without modifying it.
 
-Each plan is duplicated from the user's original active plan. Both AC and DC values are set because the PC continues to receive mains-like 230 V from the external UPS on battery.
+Eco (cloned scheme only): CPU maximum processor state 65%; mechanical HDD idle 120 s; Windows system sleep (standby), hibernation and automatic display blanking timeouts all set to Never (0).
 
-Secondary monitor buttons: read Windows monitor topology, ignore MONITORINFOF_PRIMARY, send DDC/CI VCP 0xD6=4 to secondary physical monitors and 0xD6=1 on restore. This is an opt-in best-effort hardware feature; keep the primary visible. This does not remove the display from Windows, guarantee savings, or guarantee remote wake.
+Emergency (cloned scheme only): CPU maximum processor state 40%; mechanical HDD idle 60 s; Windows system sleep (standby), hibernation and automatic display blanking timeouts all set to Never (0).
 
-Mechanical HDDs may repeatedly spin up with aggressive timeouts, causing wear/latency. Timeout defaults at 60–120 s are intentionally moderate; SSD/NVMe standby is OS/firmware-defined.
-No forcing process sleep/kill, GPU undervolt, disabling USB ports, Windows Update manipulation or hibernation.
+The cloned plans set both AC and DC values using `powercfg`:
+- `SUB_SLEEP/STANDBYIDLE = 0`
+- `SUB_SLEEP/HIBERNATEIDLE = 0`
+- `SUB_VIDEO/VIDEOIDLE = 0`
 
-Planned fail-safe: automated battery policy only after read-only telemetry is validated and freshness known, with user opt-in and a clearly visible pause toggle.
+The app issues no system sleep/hibernate/shutdown command. Manual sleep by the user, third-party utilities, or firmware-level suspend may still occur. Normal and clean app exit restore the original power plan; crashes/power outages require manual recovery, as described in README. All 230 V KEMOT UPS loads look like AC to Windows, hence both AC/DC changes.
+
+Secondary-monitor off/on is an optional manual DDC/CI VCP 0xD6 operation, NOT PC sleep. The Windows primary display is never targeted. DDC/CI does not necessarily power down all monitors or guarantee remote wake.
+
+HDD standby may still occur after 60–120 s; SSD/NVMe behavior is defined by hardware/firmware. No process kills, GPU voltage modification, USB port disabling, or BMS writes.
+
+To verify on Windows: save original `powercfg /getactivescheme`, select Eco/Emergency, then run:
+```powershell
+powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
+powercfg /query SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE
+powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
+```
+Verify **both AC and DC** show `0x00000000`. Return to Normal and confirm the initial GUID is active. Hardware validation remains pending.
