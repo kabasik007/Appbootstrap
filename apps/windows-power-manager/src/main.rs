@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod adaptive;
 mod displays;
 mod gpu;
@@ -16,7 +18,6 @@ enum Action {
     ObserveCpu(f32),
     SecondaryOff,
     SecondaryOn,
-    AllDisplaysOff,
     RestoreWindows,
     Quit,
 }
@@ -192,18 +193,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     result.map(Feedback::message)
                 }
-                Action::AllDisplaysOff => {
-                    let had_profile = plans.current_cap().is_some();
-                    plans.ensure_awake_for_display_off()
-                        .and_then(|()| displays::turn_off_all())
-                        .map(|message| {
-                            if had_profile {
-                                Feedback::message(message)
-                            } else {
-                                Feedback::profile(message, "Екрани (100%)", 100, false)
-                            }
-                        })
-                }
                 Action::RestoreWindows => {
                     let result = plans.normal();
                     if secondary_off && displays::set_secondary_power(true).is_ok() {
@@ -281,14 +270,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let all_tx = tx.clone();
-    let weak = ui.as_weak();
-    ui.on_all_displays_off_requested(move || {
-        if let Some(ui) = weak.upgrade() {
-            submit(&all_tx, Action::AllDisplaysOff, &ui);
-        }
-    });
-
     let restore_tx = tx.clone();
     let weak = ui.as_weak();
     ui.on_restore_requested(move || {
@@ -313,7 +294,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             system.refresh_memory();
             let utilization = system.global_cpu_usage();
             let _ = cpu_tx.send(Action::ObserveCpu(utilization));
-            let cpu_text = format!("CPU: {utilization:.0}% використання (не Вт)");
+            let cpu_name = system.cpus().first()
+                .map(|cpu| cpu.brand().trim())
+                .filter(|name| !name.is_empty())
+                .unwrap_or("CPU: модель недоступна");
+            let cpu_text = format!("{cpu_name} · {utilization:.0}% завантаження (не Вт)");
             let ram_text = format!(
                 "RAM: {:.1}/{:.1} ГБ",
                 system.used_memory() as f64 / 1e9,
