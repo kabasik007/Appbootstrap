@@ -16,8 +16,9 @@ enum Action {
     Manual(u8),
     AutoToggle,
     ObserveCpu(f32),
-    SecondaryOff,
-    SecondaryOn,
+    PreviewPrimary,
+    ConfirmPrimary,
+    RestoreExtended,
     RestoreWindows,
     Quit,
 }
@@ -83,6 +84,7 @@ fn feedback_to_ui(weak: slint::Weak<MainWindow>, feedback: Result<Feedback, Stri
                         ui.set_cpu_limit(cap.into());
                         ui.set_limit_text(format!("CPU ≤ {cap}%").into());
                     }
+                    ui.set_display_text(displays::primary_summary().into());
                     if let Some(automatic) = feedback.automatic {
                         ui.set_auto_text(if automatic {
                             "АВТО: УВІМКНЕНО".into()
@@ -100,10 +102,11 @@ fn feedback_to_ui(weak: slint::Weak<MainWindow>, feedback: Result<Feedback, Stri
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use slint::ComponentHandle;
-    use std::{sync::mpsc, time::Duration};
+    use std::{sync::mpsc, time::{Duration, Instant}};
 
     let ui = MainWindow::new()?;
     estimate(&ui);
+    ui.set_display_text(displays::primary_summary().into());
     let weak = ui.as_weak();
     ui.on_settings_changed(move || {
         if let Some(ui) = weak.upgrade() {
@@ -116,8 +119,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let control_thread = std::thread::spawn(move || {
         let mut plans = power::PowerPlans::default();
         let mut auto = adaptive::AdaptiveCpu::default();
-        let mut secondary_off = false;
-        while let Ok(action) = rx.recv() {
+        let mut screen_changed = false;
+        let mut preview_since: Option<Instant> = None;
+        loop {
+            let action = if let Some(started) = preview_since {
+                match rx.recv_timeout(Duration::from_millis(900)) {
+                    Ok(action) => action,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        let remaining = 20_u64.saturating_sub(started.elapsed().as_secs());
+                        if remaining == 0 {
+                            let result = displays::restore_extended();
+                            if result.is_ok() {
+                                screen_changed = false;
+                            }
+                            preview_since = None;
+                            feedback_to_ui(weak.clone(), result.map(|_| Feedback::message(
+                                "20 секунд минуло — відновлено розширені екрани Windows.".to_owned())));
+                        } else {
+                            feedback_to_ui(weak.clone(), Ok(Feedback::message(format!(
+                                "Перевір головний монітор і натисни «ЗАЛИШИТИ». Автовідновлення через {remaining} с."
+                            ))));
+                        }
+                        continue;
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            } else {
+                match rx.recv() {
+                    Ok(action) => action,
+                    Err(_) => break,
+                }
+            };
             if matches!(action, Action::Quit) {
                 break;
             }
@@ -179,24 +211,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
                 }
-                Action::SecondaryOff => {
-                    let result = displays::set_secondary_power(false);
+                Action::PreviewPrimary => {
+                    let result = displays::preview_primary();
                     if result.is_ok() {
-                        secondary_off = true;
+                        screen_changed = true;
+                        preview_since = Some(Instant::now());
                     }
                     result.map(Feedback::message)
                 }
-                Action::SecondaryOn => {
-                    let result = displays::set_secondary_power(true);
+                Action::ConfirmPrimary => {
+                    if preview_since.take().is_some() {
+                        Ok(Feedback::message(
+                            "Один монітор підтверджено. Натисни «РОЗШИРИТИ», щоб повернути 4 екрани. Вихід із Zilla також відновить розширення.".into()
+                        ))
+                    } else {
+                        Ok(Feedback::message("Немає активного попереднього перегляду.".into()))
+                    }
+                }
+                Action::RestoreExtended => {
+                    let result = displays::restore_extended();
                     if result.is_ok() {
-                        secondary_off = false;
+                        screen_changed = false;
+                        preview_since = None;
                     }
                     result.map(Feedback::message)
                 }
                 Action::RestoreWindows => {
                     let result = plans.normal();
-                    if secondary_off && displays::set_secondary_power(true).is_ok() {
-                        secondary_off = false;
+                    if screen_changed && displays::restore_extended().is_ok() {
+                        screen_changed = false;
+                        preview_since = None;
                     }
                     if result.is_ok() {
                         auto.disable();
@@ -212,9 +256,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             feedback_to_ui(weak.clone(), feedback);
         }
-        // Clean exit: secondary displays and original plan best-effort recovery.
-        if secondary_off {
-            let _ = displays::set_secondary_power(true);
+        // Clean exit: restore topology whenever Zilla changed it.
+        // DisplaySwitch /extend is best-effort and may not reproduce
+        // all custom 4-monitor placements; Windows Display settings can.
+        if screen_changed {
+            let _ = displays::restore_extended();
         }
         // PowerPlans Drop re-activates original plan only if our clone is active.
     });
@@ -254,19 +300,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let off_tx = tx.clone();
+    let preview_tx = tx.clone();
     let weak = ui.as_weak();
-    ui.on_secondary_sleep_requested(move || {
+    ui.on_preview_primary_requested(move || {
         if let Some(ui) = weak.upgrade() {
-            submit(&off_tx, Action::SecondaryOff, &ui);
+            submit(&preview_tx, Action::PreviewPrimary, &ui);
         }
     });
 
-    let on_tx = tx.clone();
+    let confirm_tx = tx.clone();
     let weak = ui.as_weak();
-    ui.on_secondary_wake_requested(move || {
+    ui.on_confirm_primary_requested(move || {
         if let Some(ui) = weak.upgrade() {
-            submit(&on_tx, Action::SecondaryOn, &ui);
+            submit(&confirm_tx, Action::ConfirmPrimary, &ui);
+        }
+    });
+
+    let restore_display_tx = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_restore_extended_requested(move || {
+        if let Some(ui) = weak.upgrade() {
+            submit(&restore_display_tx, Action::RestoreExtended, &ui);
         }
     });
 
