@@ -1,49 +1,38 @@
-# Zilla Power Manager
+# Zilla Power Manager — Windows 11 / Rust + Slint
 
-Native Windows 10/11 UPS companion written in Rust + Slint, following the desktop-native profile and engineering rules from Appbootstrap.
+Native desktop power manager with reversible Windows power scheme changes. Intended for use with a 230V KEMOT inverter and 4S LiFePO4 external battery, which Windows cannot detect as an ordinary laptop battery.
 
-## What v0.1 does
+## Power controls
+- Maximum 100%, Balanced 80%, Minimum 55% and Hard 25% CPU ceiling presets.
+- Slider: CPU max processor state 20–100%, changes applied when slider is released.
+- AUTO, off by default: sustained high CPU usage raises CPU limit by 10%, sustained low usage reduces it by 5%, with a cooldown. AUTO bounds are 35–95%. Manual controls override it.
+- Explicit only-main-screen (DDC/CI secondary monitors off) and restore secondary button.
+- Explicit all-screens-off Windows display command, not PC sleep. Keyboard/mouse typically wakes displays.
+- Live CPU/RAM measurements and optional NVIDIA GPU chip watts / usage read-only when nvidia-smi is available.
+- Manual LiFePO4 SOC and manual UPS watt input for runtime estimates. These are NOT automatic readings.
+- Restore original Windows power plan; clean app exit also reverts if the temporary Zilla plan remains active.
 
-- Three manual modes: Normal, Eco (CPU ceiling 65%, HDD idle 120 s), Emergency (CPU ceiling 40%, HDD idle 60 s). In the cloned Eco/Emergency plans, automatic Windows sleep/hibernate and display blanking are disabled (both AC/DC).
-- Changes only duplicates of the original Windows power plan; Normal and clean exit restore the previous plan.
-- Manual secondary monitor sleep / wake via VESA DDC/CI (VCP 0xD6). Windows' primary monitor is never targeted.
-- Displays CPU utilization and RAM usage; runs sampling off the UI thread.
-- Estimates runtime for a *configured* 4S LiFePO4 334 Ah battery and a KEMOT 12 V inverter. SOC and load are MANUAL; no fake metering.
-- All functions offline. No process kills, registry tuning, driver install, forced PC sleep/hibernate or automatic power events. The manual secondary-monitor DDC/CI off/on control is not Windows system sleep.
+## Windows sleep policy
+Managed Zilla plans set AC and DC Windows standby, hibernate and display inactivity timeouts to Never. The app never deliberately sleeps or hibernates Windows. Manual OS/firmware sleep and sleep from third-party software remain possible. Choosing Restore original returns whatever Windows sleep settings the user already had.
 
-## Build and test
+## Why 100 W is not guaranteed
+A CPU performance cap is NOT a watt cap. NVIDIA GPU watts only describe part of the hardware. Total power includes processor, GPU, RAM, motherboard, drives, displays and UPS inverter losses. Accurate 100 W targeting needs a wattmeter or trusted UPS power telemetry. Do not equate a manual calculator input with a measurement.
 
-Install Rust stable for Windows x64 MSVC, Microsoft C++ Build Tools + Windows SDK (IDE not necessary).
+## Build / verify on Windows 11
+Install stable Rust x64 MSVC, Windows SDK, and Microsoft C++ Build Tools. In apps/windows-power-manager run:
 
-From repository root:
-    cd apps/windows-power-manager
     cargo fmt --all -- --check
     cargo clippy --all-targets -- -D warnings
     cargo test
     cargo build --release
 
-Build artifacts: target/release/zilla-power-manager.exe. The Windows GitHub Actions workflow in this branch produces an unsigned build artifact on successful compile.
+Result: target/release/zilla-power-manager.exe. Successful GitHub Actions builds upload an unsigned ZillaPowerManager-Windows-x64 artifact.
 
-## Risks and limitations
+## Manual recovery
+Record your original active GUID from powercfg /getactivescheme. If the app crashes, powercfg /list shows all plans. Use powercfg /setactive ORIGINAL_GUID to restore, then powercfg /delete INACTIVE_ZILLA_GUID to remove the temporary plan. Never delete an active scheme.
 
-- Desktop computers running on an external 230 V KEMOT UPS appear AC-powered to Windows even when KEMOT is running from the battery. Automatic UPS transfer detection is NOT implemented.
-- 334 Ah is the JK BMS configured capacity; cell model not independently confirmed. Efficiency (85%) and inverter standby consumption (15 W) are hypothetical; use a wattmeter to calibrate.
-- Windows power plan CPU percentages are *performance ceilings*, not exact watt limits. Platform firmware may not honor every setting. The app prevents inactivity-triggered sleep only in its cloned plans; it cannot prevent manual, firmware, or third-party power transitions.
-- Windows HDD idle settings do not immediately spin down every disk; SSD/NVMe drives normally do not benefit from mechanical disk standby.
-- DDC/CI requires compatible external monitors and a cable/adapter passing DDC commands. It can be disabled in the monitor OSD. Sending DDC/CI power-off can leave a monitor requiring its physical button to wake. Leave the primary display active and test the secondary displays individually with access to their controls.
-- Per-monitor power commands do not guarantee zero power draw or remove a display from Windows layout.
-- Sudden crash/power outage may leave a cloned Windows plan active. Recovery: open an elevated terminal; run powercfg /list; activate your old plan with powercfg /setactive GUID; delete inactive Zilla clones with powercfg /delete GUID. Never delete an active Windows plan.
-- Forced shutdown cannot guarantee DDC/CI recovery. Use the monitor hardware power button if necessary.
-- JK BMS Bluetooth, actual wall-watt measurements, automatic battery detection and hibernation are NOT in v0.1.
+Test both AC and DC profile readback (powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE, SUB_SLEEP HIBERNATEIDLE, SUB_VIDEO VIDEOIDLE and SUB_PROCESSOR PROCTHROTTLEMAX). Verify no surprise PC sleep, monitor wake with your specific monitors, and plan restoration on exit.
 
-## Safe test sequence
+DDC/CI secondary-monitor sleep may not work for every monitor/cable or may require a physical button to wake. Mechanical HDD standby may increase wear if used frequently. No drivers, BMS writes or GPU voltage modifications are performed.
 
-1. Save work. Record the active scheme from powercfg /getactivescheme.
-2. Launch Normal first and set manual SOC/watts; inspect the calculator.
-3. Try Eco and verify the new Zilla plan from powercfg /list; confirm your applications work as expected. Inspect `powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE`, `powercfg /query SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE` and `powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE`. Both AC and DC values should be zero.
-4. Switch back to Normal, confirm the original GUID.
-5. Enable DDC/CI on one secondary monitor, then test the secondary sleep button. Ensure primary stays visible, and test wake button.
-6. If monitor wake fails, press its physical power button. Do not rely on it for emergency shutdown.
-7. Run Windows tests on actual PC/monitor hardware before adopting the app as a production UPS safety mechanism.
-
-Project contracts: docs/PROJECT_BRIEF.md, docs/ARCHITECTURE.md, docs/QUALITY_GATES.md, docs/ROADMAP.md.
+More details: docs/POWER_POLICY.md and docs/ROADMAP.md.
