@@ -50,7 +50,11 @@ pub fn summary() -> (String, String) {
             Ok(out) if out.status.success() => parse_readings(&String::from_utf8_lossy(&out.stdout)),
             _ => SensorReading::default(),
         };
-        let name = reading.gpu_name.unwrap_or_else(|| "GPU (модель недоступна)".to_owned());
+        // PowerShell/WMI can fail or use an incompatible console encoding.
+        // Enumerate installed Windows display adapters natively as a fallback.
+        let name = reading.gpu_name
+            .or_else(crate::displays::graphics_adapter_name)
+            .unwrap_or_else(|| "GPU (модель недоступна)".to_owned());
         let usage = reading.gpu_load.map(|v| format!(" · {:.0}%", v)).unwrap_or_default();
         let gpu_w = reading.gpu_w
             .map(|v| format!(" · {:.1} Вт GPU", v))
