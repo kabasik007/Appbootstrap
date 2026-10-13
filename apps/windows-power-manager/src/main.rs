@@ -316,8 +316,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(ui) = weak.upgrade() {
                     ui.set_cpu_text(cpu_text.into());
                     ui.set_ram_text(ram_text.into());
-                    if let Some(gpu_text) = gpu_text {
+                    if let Some((gpu_text, cpu_watts)) = gpu_text {
                         ui.set_gpu_text(gpu_text.into());
+                        ui.set_cpu_watts_text(cpu_watts.into());
                     }
                 }
             });
