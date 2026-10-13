@@ -6,8 +6,8 @@ Native desktop power manager with reversible Windows power scheme changes. Inten
 - Maximum 100%, Balanced 80%, Minimum 55% and Hard 25% CPU ceiling presets, now displayed as colored profile tiles.
 - Slider: CPU max processor state 20–100%, changes applied when slider is released.
 - AUTO, off by default: sustained high CPU usage raises CPU limit by 10%, sustained low usage reduces it by 5%, with a cooldown. AUTO bounds are 35–95%. Manual controls override it.
-- Explicit only-main-screen (DDC/CI secondary monitors off) and restore secondary button.
-- No all-screens-off control: it was intentionally removed to avoid leaving the user without a visible monitor. Only optional secondary-monitor DDC/CI controls remain.
+- Safe 4-monitor topology switch: **One screen (20-second preview)**, **Keep**, **Restore extended** using Windows 11 DisplaySwitch numeric modes 1/3. Does not send DDC/CI physical-off commands. Timed preview automatically tries to restore extended mode unless confirmed; normal exit also restores extended mode if Zilla changed it.
+- No all-screens-off control: it was intentionally removed to avoid leaving the user without a visible monitor. Only reversible Windows topology controls remain.
 - CPU model and live load, RAM usage, and read-only GPU model through Windows WMI. Optional AMD/NVIDIA GPU power/utilization and CPU package power are read from **LibreHardwareMonitor** sensors when that application is running and exposes WMI. Without these sensors, watt fields display `н/д` (not guessed).
 - Manual LiFePO4 SOC and manual UPS watt input for runtime estimates. These are NOT automatic readings.
 - Restore original Windows power plan; clean app exit also reverts if the temporary Zilla plan remains active.
@@ -20,7 +20,16 @@ The Windows EXE uses the Windows GUI subsystem. Invoked `powercfg` and read-only
 
 1. Open **AMD Software: Adrenalin Edition → Performance → Metrics**, and enable GPU Total Board Power (TBP) to compare values.
 2. Optional for reading watts inside Zilla: start LibreHardwareMonitor from its **official** GitHub releases page `https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases`. Some sensors need administrator rights. Keep LibreHardwareMonitor open while testing.
-3. Zilla queries `root\\LibreHardwareMonitor` WMI sensors periodically, read-only. No automatic driver installation or changes to AMD Adrenalin profiles. GPU and CPU sensor watts are component-level, not 230 V power drawn by the inverter.
+3. Zilla queries `root\\LibreHardwareMonitor` WMI sensors periodically, read-only. **Some LibreHardwareMonitor releases (including reports for 0.9.5) have broken WMI output**; if watts are N/A, use the included diagnostic script and check sensor availability. No driver installation or AMD power-limit changes. Component watts are not 230 V UPS consumption.
+4. Without WMI, Zilla also attempts to read the Radeon name natively through Win32 `EnumDisplayDevicesW`.
+
+## Diagnostics (read-only)
+
+Download `scripts/diagnose_windows11.ps1`, then run it from a PowerShell window:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\diagnose_windows11.ps1
+
+The file `Zilla_Diagnostic_Windows11.txt` is created on your Desktop. It lists CPU/GPU identity, Windows primary monitor and active display IDs, powercfg AC/DC values and available power sensors; no sleep or display changes.
 
 ## Windows sleep policy
 Managed Zilla plans set AC and DC Windows standby, hibernate and display inactivity timeouts to Never. The app never deliberately sleeps or hibernates Windows. Manual OS/firmware sleep and sleep from third-party software remain possible. Choosing Restore original returns whatever Windows sleep settings the user already had.
@@ -43,6 +52,6 @@ Record your original active GUID from powercfg /getactivescheme. If the app cras
 
 Test both AC and DC profile readback (powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE, SUB_SLEEP HIBERNATEIDLE, SUB_VIDEO VIDEOIDLE and SUB_PROCESSOR PROCTHROTTLEMAX). Verify no surprise PC sleep, monitor wake with your specific monitors, and plan restoration on exit.
 
-DDC/CI secondary-monitor sleep may not work for every monitor/cable or may require a physical button to wake. Mechanical HDD standby may increase wear if used frequently. No drivers, BMS writes or GPU voltage modifications are performed.
+Windows primary screen is a logical designation which can differ from the physical screen you think of as main. If the Windows primary monitor is physically switched off, one-screen preview may temporarily show no visible image; after 20 seconds the app attempts to restore extended mode. The numeric `DisplaySwitch` arguments are Windows 11-specific; restore extended mode can change custom monitor placement. Check Windows Settings → System → Display and Win+P if the desktop looks wrong. The app does not physically cut monitor power. Mechanical HDD standby may increase wear if used frequently. No drivers, BMS writes or GPU voltage modifications are performed.
 
 More details: docs/POWER_POLICY.md and docs/ROADMAP.md.
