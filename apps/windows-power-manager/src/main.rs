@@ -362,7 +362,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 system.used_memory() as f64 / 1e9,
                 system.total_memory() as f64 / 1e9
             );
-            // Probe the optional NVIDIA driver only every ~12 seconds.
+            // Read AMD/NVIDIA model and optional LibreHardwareMonitor GPU/CPU sensors every ~12s.
             let gpu_text = if count.is_multiple_of(4) {
                 Some(gpu::summary())
             } else {
