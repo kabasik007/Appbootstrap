@@ -103,7 +103,7 @@ export component MainWindow inherits Window {
                 }
             }
         }
-        Text { text: "ПРОФІЛІ ЖИВЛЕННЯ"; color: #90a9c4; font-size: 12px; font-weight: 700; }
+        Text { text: "ПРОФІЛІ ЖИВЛЕННЯ — БЕЗ СНУ ПК"; color: #90a9c4; font-size: 12px; font-weight: 700; }
         HorizontalLayout {
             spacing: 10px;
             Button { text: "Normal"; clicked => { root.normal-requested(); } }
@@ -113,7 +113,7 @@ export component MainWindow inherits Window {
         Text { text: "ДРУГОРЯДНІ МОНІТОРИ (DDC/CI, основний не змінюємо)"; color: #90a9c4; font-size: 12px; font-weight: 700; }
         HorizontalLayout {
             spacing: 10px;
-            Button { text: "Приспати додаткові"; clicked => { root.secondary-sleep-requested(); } }
+            Button { text: "Вимкнути додаткові"; clicked => { root.secondary-sleep-requested(); } }
             Button { text: "Розбудити додаткові"; clicked => { root.secondary-wake-requested(); } }
         }
         Rectangle {
