@@ -1,167 +1,252 @@
-//! Apply changes only to clones of the current scheme; never edit the user's plan.
-//! A crash may leave a clone active. See README for the recovery procedure.
+//! Reversible Windows power profiles. Never modify the user's original scheme.
+//! Automatic sleep/hibernate timeouts are disabled ONLY in our cloned scheme.
+//! Manual sleep, firmware power events and other applications remain outside our control.
+
 #[cfg(windows)]
 use regex::Regex;
 #[cfg(windows)]
-use std::{collections::HashMap, process::Command};
+use std::process::Command;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Mode { Eco, Emergency }
-impl Mode {
-    #[cfg(windows)]
-    fn cpu_max(self) -> &'static str {
-        match self { Self::Eco => "65", Self::Emergency => "40" }
+pub const MIN_CPU_PERCENT: u8 = 20;
+pub const MAX_CPU_PERCENT: u8 = 100;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Preset {
+    Maximum,
+    Balanced,
+    Minimum,
+    Hard,
+}
+
+impl Preset {
+    pub fn cpu_cap(self) -> u8 {
+        match self {
+            Self::Maximum => 100,
+            Self::Balanced => 80,
+            Self::Minimum => 55,
+            Self::Hard => 25,
+        }
     }
-    #[cfg(windows)]
-    fn disk_idle(self) -> &'static str {
-        match self { Self::Eco => "120", Self::Emergency => "60" }
+
+    pub fn disk_idle_seconds(self) -> u32 {
+        match self {
+            Self::Maximum => 0,
+            Self::Balanced => 300,
+            Self::Minimum => 180,
+            Self::Hard => 120,
+        }
     }
-    #[cfg(windows)]
-    fn name(self) -> &'static str {
-        match self { Self::Eco => "Zilla PM Eco", Self::Emergency => "Zilla PM Emergency" }
-    }
-    #[cfg(windows)]
-    fn settings(self) -> [[&'static str; 4]; 10] {
-        [
-            ["SUB_PROCESSOR", "PROCTHROTTLEMAX", self.cpu_max(), "AC"],
-            ["SUB_PROCESSOR", "PROCTHROTTLEMAX", self.cpu_max(), "DC"],
-            ["SUB_VIDEO", "VIDEOIDLE", "0", "AC"],
-            ["SUB_VIDEO", "VIDEOIDLE", "0", "DC"],
-            ["SUB_DISK", "DISKIDLE", self.disk_idle(), "AC"],
-            ["SUB_DISK", "DISKIDLE", self.disk_idle(), "DC"],
-            ["SUB_SLEEP", "STANDBYIDLE", "0", "AC"],
-            ["SUB_SLEEP", "STANDBYIDLE", "0", "DC"],
-            ["SUB_SLEEP", "HIBERNATEIDLE", "0", "AC"],
-            ["SUB_SLEEP", "HIBERNATEIDLE", "0", "DC"],
-        ]
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Maximum => "Максимальна",
+            Self::Balanced => "Середня",
+            Self::Minimum => "Мінімальна",
+            Self::Hard => "Hard",
+        }
     }
 }
+
+pub fn validate_cap(cap: u8) -> Result<(), String> {
+    if (MIN_CPU_PERCENT..=MAX_CPU_PERCENT).contains(&cap) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Ліміт CPU має бути у діапазоні {MIN_CPU_PERCENT}–{MAX_CPU_PERCENT}%"
+        ))
+    }
+}
+
 #[derive(Default)]
 pub struct PowerPlans {
     #[cfg(windows)]
     original: Option<String>,
     #[cfg(windows)]
-    clones: HashMap<Mode, String>,
+    clone: Option<String>,
+    current_cap: Option<u8>,
 }
+
 #[cfg(windows)]
 fn command(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("powercfg").args(args).output()
-        .map_err(|e| format!("powercfg не запущено: {e}"))?;
+    let output = Command::new("powercfg")
+        .args(args)
+        .output()
+        .map_err(|e| format!("Не вдалося запустити powercfg: {e}"))?;
     if !output.status.success() {
-        return Err(format!("powercfg {} повернув помилку {}", args.join(" "), output.status));
+        return Err(format!(
+            "powercfg {} завершився з помилкою {}: {}",
+            args.join(" "),
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
+
 #[cfg(windows)]
 fn guid(source: &str) -> Result<String, String> {
-    let re = Regex::new(r"(?i)[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")
+    let regex = Regex::new(r"(?i)[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}")
         .map_err(|e| e.to_string())?;
-    re.find(source).map(|m| m.as_str().to_lowercase())
-        .ok_or_else(|| "GUID схеми не знайдено".to_owned())
+    regex
+        .find(source)
+        .map(|m| m.as_str().to_lowercase())
+        .ok_or_else(|| "Не вдалося знайти GUID схеми Windows".to_owned())
 }
+
 #[cfg(windows)]
-fn active_guid() -> Result<String, String> { guid(&command(&["/getactivescheme"])?) }
+fn active_guid() -> Result<String, String> {
+    guid(&command(&["/getactivescheme"])?)
+}
+
+#[cfg(windows)]
+fn set_index(id: &str, sub: &str, setting: &str, value: &str) -> Result<(), String> {
+    for verb in ["/setacvalueindex", "/setdcvalueindex"] {
+        command(&[verb, id, sub, setting, value])?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn configure_scheme(id: &str, cap: u8, disk_idle_seconds: u32) -> Result<(), String> {
+    // CPU minimum can scale down at idle. Performance ceiling is NOT a watt cap.
+    set_index(id, "SUB_PROCESSOR", "PROCTHROTTLEMIN", "5")?;
+    set_index(id, "SUB_PROCESSOR", "PROCTHROTTLEMAX", &cap.to_string())?;
+    // Never trigger Windows system sleep/hibernate automatically.
+    set_index(id, "SUB_SLEEP", "STANDBYIDLE", "0")?;
+    set_index(id, "SUB_SLEEP", "HIBERNATEIDLE", "0")?;
+    // Keep monitor sleep as a separate explicit user command.
+    set_index(id, "SUB_VIDEO", "VIDEOIDLE", "0")?;
+    // Mechanical HDD power-off at short intervals may cause wear.
+    set_index(id, "SUB_DISK", "DISKIDLE", &disk_idle_seconds.to_string())?;
+    Ok(())
+}
 
 impl PowerPlans {
-    pub fn apply(&mut self, mode: Mode) -> Result<String, String> {
+    pub fn apply_preset(&mut self, preset: Preset) -> Result<String, String> {
+        self.apply(preset.cpu_cap(), preset.disk_idle_seconds(), preset.label())
+    }
+
+    pub fn apply_custom(&mut self, cap: u8) -> Result<String, String> {
+        self.apply(cap, 300, "Ручний")
+    }
+
+    pub fn apply_adaptive(&mut self, cap: u8) -> Result<String, String> {
+        self.apply(cap, 300, "Авто")
+    }
+
+    pub fn current_cap(&self) -> Option<u8> {
+        self.current_cap
+    }
+
+    fn apply(&mut self, cap: u8, disk_idle_seconds: u32, label: &str) -> Result<String, String> {
+        validate_cap(cap)?;
         #[cfg(not(windows))]
-        { let _ = mode; Err("Потрібен Windows".to_owned()) }
+        {
+            let _ = (disk_idle_seconds, label);
+            Err("Керування живленням доступне тільки у Windows".to_owned())
+        }
         #[cfg(windows)]
         {
-            if self.original.is_none() { self.original = Some(active_guid()?); }
-            let base = self.original.as_ref().expect("initialized");
-            let id = if let Some(id) = self.clones.get(&mode) {
-                id.clone()
+            let original = if let Some(original) = &self.original {
+                original.clone()
             } else {
-                let id = guid(&command(&["/duplicatescheme", base])?)?;
-                // Disable inactivity-triggered system sleep, hibernation and screen blanking
-                // only on disposable clones. The original Windows scheme is unchanged.
-                let changes = mode.settings();
-                let configuration = (|| -> Result<(), String> {
-                    command(&["/changename", &id, mode.name()])?;
-                    for [sub, setting, value, supply] in changes {
-                        let verb = if supply == "AC" { "/setacvalueindex" } else { "/setdcvalueindex" };
-                        command(&[verb, &id, sub, setting, value])?;
-                    }
-                    Ok(())
-                })();
-                if let Err(e) = configuration {
+                let initial = active_guid()?;
+                self.original = Some(initial.clone());
+                initial
+            };
+            let id = if let Some(clone) = &self.clone {
+                clone.clone()
+            } else {
+                let id = guid(&command(&["/duplicatescheme", &original])?)?;
+                if let Err(error) = command(&["/changename", &id, "Zilla Power Manager (temporary)"]) {
                     let _ = command(&["/delete", &id]);
-                    return Err(e);
+                    return Err(error);
                 }
-                self.clones.insert(mode, id.clone());
+                self.clone = Some(id.clone());
                 id
             };
-            command(&["/setactive", &id])?;
-            let name = match mode {
-                Mode::Eco => "Eco: CPU до 65%, HDD 120 c; сон/гібернація Windows вимкнені",
-                Mode::Emergency => "Emergency: CPU до 40%, HDD 60 c; сон/гібернація Windows вимкнені"
-            };
-            Ok(name.to_owned())
+            if let Err(error) = configure_scheme(&id, cap, disk_idle_seconds)
+                .and_then(|_| command(&["/setactive", &id]).map(|_| ()))
+            {
+                // If a profile update fails, revert to the original plan.
+                let _ = command(&["/setactive", &original]);
+                self.current_cap = None;
+                return Err(error);
+            }
+            self.current_cap = Some(cap);
+            Ok(format!(
+                "{label}: CPU ≤ {cap}% (не ліміт ватів); ПК без автоматичного сну"
+            ))
         }
     }
+
+    pub fn ensure_awake_for_display_off(&mut self) -> Result<(), String> {
+        if self.current_cap.is_none() {
+            // The monitor-off command must not leave the PC using a plan
+            // that could automatically suspend on inactivity.
+            self.apply(100, 300, "Екрани")?;
+        }
+        Ok(())
+    }
+
     pub fn normal(&mut self) -> Result<String, String> {
         #[cfg(not(windows))]
-        { Ok("No-op on non-Windows".to_owned()) }
+        {
+            self.current_cap = None;
+            Ok("Windows only".to_owned())
+        }
         #[cfg(windows)]
         {
             if let Some(original) = &self.original {
                 command(&["/setactive", original])?;
-                Ok("Відновлено початковий план Windows".to_owned())
-            } else {
-                Ok("Збережено поточний план Windows".to_owned())
             }
+            self.current_cap = None;
+            Ok("Відновлено початковий план Windows".to_owned())
         }
     }
 }
+
 impl Drop for PowerPlans {
     fn drop(&mut self) {
         #[cfg(windows)]
         {
-            if self.original.is_none() { return; }
-            let current = active_guid().ok();
-            if current.as_ref().is_some_and(|id| self.clones.values().any(|x| x == id)) {
-                let _ = self.normal();
+            let (Some(original), Some(clone)) = (&self.original, &self.clone) else {
+                return;
+            };
+            // Do not override a power scheme selected by the user after our app.
+            if active_guid().ok().as_deref() == Some(clone.as_str()) {
+                let _ = command(&["/setactive", original]);
             }
-            let current = active_guid().ok();
-            for id in self.clones.values() {
-                if current.as_ref() != Some(id) {
-                    let _ = command(&["/delete", id]);
-                }
+            if active_guid().ok().as_deref() != Some(clone.as_str()) {
+                let _ = command(&["/delete", clone]);
             }
         }
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
-    use super::{Mode, PowerPlans};
+    use super::*;
 
     #[test]
-    fn modes_disable_sleep_hibernation_and_automatic_screen_blank() {
-        for mode in [Mode::Eco, Mode::Emergency] {
-            let settings = mode.settings();
-            for supply in ["AC", "DC"] {
-                for (group, setting) in [
-                    ("SUB_SLEEP", "STANDBYIDLE"),
-                    ("SUB_SLEEP", "HIBERNATEIDLE"),
-                    ("SUB_VIDEO", "VIDEOIDLE"),
-                ] {
-                    assert!(
-                        settings.contains(&[group, setting, "0", supply]),
-                        "missing no-sleep setting: {group}/{setting}/{supply}"
-                    );
-                }
-            }
-        }
+    fn presets_are_ordered_by_cpu_cap() {
+        assert_eq!(Preset::Maximum.cpu_cap(), 100);
+        assert_eq!(Preset::Balanced.cpu_cap(), 80);
+        assert_eq!(Preset::Minimum.cpu_cap(), 55);
+        assert_eq!(Preset::Hard.cpu_cap(), 25);
+        assert!(Preset::Hard.cpu_cap() >= MIN_CPU_PERCENT);
     }
 
     #[test]
-    fn mode_cpu_caps_remain_distinct_and_construction_has_no_os_side_effects() {
-        assert_eq!(Mode::Eco.cpu_max(), "65");
-        assert_eq!(Mode::Emergency.cpu_max(), "40");
-        let plans = PowerPlans::default();
-        assert!(plans.original.is_none());
-        assert!(plans.clones.is_empty());
+    fn custom_cpu_limits_are_bounded() {
+        assert!(validate_cap(20).is_ok());
+        assert!(validate_cap(100).is_ok());
+        assert!(validate_cap(19).is_err());
+        assert!(validate_cap(101).is_err());
+    }
+
+    #[test]
+    fn new_manager_does_not_change_system() {
+        assert_eq!(PowerPlans::default().current_cap(), None);
     }
 }
