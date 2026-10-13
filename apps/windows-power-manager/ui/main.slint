@@ -1,25 +1,56 @@
 import { Button, Slider } from "std-widgets.slint";
 
+component ProfileTile inherits Rectangle {
+    in property <string> heading;
+    in property <string> description;
+    in property <color> accent: #47e2ae;
+    callback activated();
+    background: #19273a;
+    border-color: root.accent;
+    border-width: 1px;
+    border-radius: 14px;
+    height: 83px;
+    VerticalLayout {
+        padding: 13px;
+        spacing: 5px;
+        Text {
+            text: root.heading;
+            color: root.accent;
+            font-size: 16px;
+            font-weight: 750;
+        }
+        Text {
+            text: root.description;
+            color: #c1cee0;
+            font-size: 12px;
+        }
+    }
+    TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "Zilla Power Manager — Windows 11";
-    width: 960px;
-    height: 850px;
-    background: #0d1522;
+    width: 940px;
+    height: 855px;
+    background: #0b1320;
     default-font-family: "Segoe UI";
 
     in-out property <float> soc: 78;
-    in-out property <float> watts: 300;
+    in-out property <float> watts: 200;
     in-out property <float> cpu-limit: 55;
     in property <string> soc-text: "78%";
-    in property <string> watts-text: "300 Вт (ручні)";
+    in property <string> watts-text: "200 Вт (ручні)";
     in property <string> runtime-text: "—";
-    in property <string> cpu-text: "CPU: —";
+    in property <string> cpu-text: "CPU: визначення...";
+    in property <string> cpu-watts-text: "CPU package: Вт н/д";
     in property <string> ram-text: "RAM: —";
-    in property <string> gpu-text: "GPU: перевірка...";
+    in property <string> gpu-text: "AMD/NVIDIA: визначення...";
     in property <string> limit-text: "CPU ≤ 55% (ще не застосовано)";
     in property <string> plan-text: "Windows (початковий)";
-    in property <string> auto-text: "АВТО: ВИМКНЕНО";
-    in property <string> status-text: "Готово. Обери профіль або перемісти повзунок. Сон ПК не запускаємо.";
+    in property <string> auto-text: "АВТО · ВИМКНЕНО";
+    in property <string> status-text: "Застосуй профіль або перемісти повзунок. Windows не переводимо в сон.";
 
     callback settings-changed();
     callback preset-requested(int);
@@ -27,146 +58,217 @@ export component MainWindow inherits Window {
     callback auto-requested();
     callback secondary-sleep-requested();
     callback secondary-wake-requested();
-    callback all-displays-off-requested();
     callback restore-requested();
 
     VerticalLayout {
         padding: 20px;
         spacing: 10px;
-        Text {
-            text: "ZILLA  POWER MANAGER";
-            font-size: 26px;
-            font-weight: 800;
-            color: #e6f1ff;
-        }
-        Text {
-            text: "Windows 11  •  Rust + Slint  •  Жодного автоматичного переходу у сон";
-            color: #90a9c4;
-            font-size: 13px;
-        }
+
         Rectangle {
-            background: #182537;
-            border-radius: 12px;
-            VerticalLayout {
-                padding: 14px;
-                spacing: 5px;
-                Text { text: "ЖИВІ ДАНІ КОМП'ЮТЕРА"; color: #90a9c4; font-size: 12px; font-weight: 700; }
-                Text { text: root.cpu-text; color: #e6f1ff; font-size: 16px; }
-                Text { text: root.ram-text; color: #c4d5e7; font-size: 14px; }
-                Text { text: root.gpu-text; color: #42e3a1; font-size: 14px; }
+            background: #14243a;
+            border-radius: 16px;
+            height: 78px;
+            HorizontalLayout {
+                padding: 16px;
+                spacing: 12px;
+                Rectangle {
+                    width: 43px;
+                    height: 43px;
+                    background: #2c7bf2;
+                    border-radius: 12px;
+                    Text {
+                        text: "ϟ";
+                        font-size: 35px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        color: #ffffff;
+                    }
+                }
+                VerticalLayout {
+                    spacing: 5px;
+                    Text { text: "ZILLA  POWER MANAGER"; font-size: 24px; font-weight: 800; color: #f5f8ff; }
+                    Text { text: "Енергія під контролем  ·  Windows 11  ·  Native Rust"; font-size: 12px; color: #9cb1cc; }
+                }
+                Rectangle {
+                    width: 175px;
+                    background: #17392f;
+                    border-radius: 10px;
+                    Text {
+                        text: "●  ПК НЕ ЗАСИНАЄ";
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: #49e4ae;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
-        Text { text: "ПРОФІЛІ ПРОДУКТИВНОСТІ"; color: #90a9c4; font-size: 13px; font-weight: 700; }
+
         HorizontalLayout {
             spacing: 10px;
-            Button { text: "МАКСИМУМ 100%"; clicked => { root.preset-requested(0); } }
-            Button { text: "СЕРЕДНІЙ 80%"; clicked => { root.preset-requested(1); } }
-            Button { text: "МІНІМУМ 55%"; clicked => { root.preset-requested(2); } }
-            Button { text: "HARD 25%"; clicked => { root.preset-requested(3); } }
+            Rectangle {
+                background: #172437;
+                border-radius: 12px;
+                height: 100px;
+                VerticalLayout {
+                    padding: 13px;
+                    spacing: 5px;
+                    Text { text: "ПРОЦЕСОР"; font-weight: 700; font-size: 11px; color: #8facc9; }
+                    Text { text: root.cpu-text; color: #f2f5fa; font-size: 14px; wrap: word-wrap; }
+                    Text { text: root.cpu-watts-text; color: #65d9fc; font-size: 12px; }
+                }
+            }
+            Rectangle {
+                background: #172437;
+                border-radius: 12px;
+                height: 100px;
+                VerticalLayout {
+                    padding: 13px;
+                    spacing: 5px;
+                    Text { text: "ВІДЕОКАРТА"; font-weight: 700; font-size: 11px; color: #8facc9; }
+                    Text { text: root.gpu-text; color: #f2f5fa; font-size: 13px; wrap: word-wrap; }
+                }
+            }
         }
+
+        HorizontalLayout {
+            spacing: 10px;
+            Text { text: "ШВИДКІ РЕЖИМИ"; font-size: 12px; font-weight: 700; color: #8facc9; }
+            Text { text: "Активний: " + root.plan-text; color: #5ce4b2; font-size: 12px; horizontal-alignment: right; }
+        }
+
+        HorizontalLayout {
+            spacing: 10px;
+            ProfileTile {
+                heading: "⚡ MAX";
+                description: "100% · без обмеження";
+                accent: #4bd79f;
+                activated => { root.preset-requested(0); }
+            }
+            ProfileTile {
+                heading: "◈ BALANCED";
+                description: "80% · повсякденно";
+                accent: #60b6ff;
+                activated => { root.preset-requested(1); }
+            }
+            ProfileTile {
+                heading: "⬡ ECO";
+                description: "55% · економія";
+                accent: #dfa263;
+                activated => { root.preset-requested(2); }
+            }
+            ProfileTile {
+                heading: "◆ HARD";
+                description: "25% · максимум економії";
+                accent: #ff6f7f;
+                activated => { root.preset-requested(3); }
+            }
+        }
+
         Rectangle {
-            background: #182537;
-            border-radius: 12px;
+            background: #18273c;
+            border-radius: 14px;
+            height: 124px;
             VerticalLayout {
-                padding: 15px;
-                spacing: 11px;
+                padding: 14px;
+                spacing: 8px;
                 HorizontalLayout {
-                    Text { text: "ПЛАВНЕ НАЛАШТУВАННЯ CPU"; font-weight: 700; color: #e6f1ff; font-size: 15px; }
-                    Text { text: root.limit-text; color: #42e3a1; font-size: 14px; horizontal-alignment: right; }
+                    Text { text: "ТОЧНЕ КЕРУВАННЯ CPU"; color: #f1f6ff; font-size: 15px; font-weight: 750; }
+                    Text { text: root.limit-text; color: #60e3b1; font-size: 13px; horizontal-alignment: right; }
                 }
                 Slider {
                     minimum: 20;
                     maximum: 100;
                     value: root.cpu-limit;
-                    released(value) => {
-                        root.cpu-limit = value;
-                        root.manual-requested(value);
-                    }
+                    released(value) => { root.cpu-limit = value; root.manual-requested(value); }
                 }
                 HorizontalLayout {
-                    Text { text: "20%  •  максимально економно"; font-size: 12px; color: #90a9c4; }
-                    Text { text: "100%  •  максимум CPU"; horizontal-alignment: right; font-size: 12px; color: #90a9c4; }
+                    Text { text: "20% · мінімально"; color: #92abc7; font-size: 11px; }
+                    Text { text: "100% · максимально"; color: #92abc7; font-size: 11px; horizontal-alignment: right; }
                 }
                 Text {
-                    text: "Рухай повзунок і відпусти — Windows застосує новий ліміт, без перезапуску ПК. Це не обмеження ватів.";
-                    wrap: word-wrap;
-                    font-size: 12px;
-                    color: #c4d5e7;
+                    text: "Ліміт продуктивності CPU. Реальна потужність у ватах залежить від навантаження та обладнання.";
+                    color: #aebfd6; font-size: 11px; wrap: word-wrap;
                 }
             }
         }
+
         Rectangle {
-            background: #18312f;
-            border-radius: 12px;
+            background: #16382f;
+            border-radius: 13px;
+            height: 68px;
             HorizontalLayout {
-                padding: 13px;
-                spacing: 12px;
+                padding: 12px;
+                spacing: 15px;
                 VerticalLayout {
-                    spacing: 4px;
-                    Text { text: root.auto-text; color: #42e3a1; font-weight: 700; font-size: 15px; }
-                    Text {
-                        text: "За тривалого навантаження +10%, на простої -5%. Діапазон 35–95%. За замовчуванням вимкнено.";
-                        color: #b8d8d0; font-size: 12px; wrap: word-wrap;
-                    }
+                    spacing: 5px;
+                    Text { text: root.auto-text; font-size: 14px; color: #4be3a9; font-weight: 800; }
+                    Text { text: "Підвищує ліміт при навантаженні, знижує в простої · 35–95%"; font-size: 12px; color: #b8dfd4; }
                 }
-                Button { text: "УВІМКНУТИ / ВИМКНУТИ AUTO"; clicked => { root.auto-requested(); } }
+                Button { text: "ПЕРЕМИКНУТИ AUTO"; clicked => { root.auto-requested(); } }
             }
         }
-        Text { text: "ЕКРАНИ — БЕЗ СНУ КОМП'ЮТЕРА"; color: #90a9c4; font-size: 13px; font-weight: 700; }
-        HorizontalLayout {
-            spacing: 10px;
-            Button { text: "Лише головний (DDC/CI)"; clicked => { root.secondary-sleep-requested(); } }
-            Button { text: "Увімкнути додаткові"; clicked => { root.secondary-wake-requested(); } }
-            Button { text: "ВИМКНУТИ ВСІ ЕКРАНИ"; clicked => { root.all-displays-off-requested(); } }
-        }
-        Text {
-            text: "Усі екрани: прокидаються від миші/клавіатури за підтримки Windows. Додаткові DDC/CI можуть потребувати фізичної кнопки.";
-            font-size: 11px; color: #90a9c4; wrap: word-wrap;
-        }
+
         Rectangle {
-            background: #182537;
-            border-radius: 12px;
+            background: #172437;
+            border-radius: 13px;
+            height: 105px;
             VerticalLayout {
-                padding: 14px;
+                padding: 13px;
+                spacing: 8px;
+                Text { text: "МОНІТОРИ · ГОЛОВНИЙ ЗАВЖДИ ЗАЛИШАЄТЬСЯ"; color: #9eb6d2; font-size: 12px; font-weight: 800; }
+                HorizontalLayout {
+                    spacing: 10px;
+                    Button { text: "ТІЛЬКИ ГОЛОВНИЙ"; clicked => { root.secondary-sleep-requested(); } }
+                    Button { text: "ВІДНОВИТИ ДОДАТКОВІ"; clicked => { root.secondary-wake-requested(); } }
+                }
+                Text { text: "DDC/CI працює не на всіх моніторах. Відновлення іноді потребує фізичної кнопки."; color: #d6b98b; font-size: 11px; }
+            }
+        }
+
+        Rectangle {
+            background: #172437;
+            border-radius: 13px;
+            height: 140px;
+            VerticalLayout {
+                padding: 13px;
                 spacing: 7px;
                 HorizontalLayout {
-                    Text { text: "РОЗРАХУНОК АВТОНОМНОСТІ"; color: #e6f1ff; font-weight: 700; font-size: 15px; }
-                    Text { text: root.runtime-text; color: #42e3a1; font-weight: 700; font-size: 18px; horizontal-alignment: right; }
+                    Text { text: "LIFEPO4  ·  ПРОГНОЗ АВТОНОМНОСТІ"; font-size: 12px; font-weight: 800; color: #9eb6d2; }
+                    Text { text: root.runtime-text; color: #51e5ac; font-size: 18px; font-weight: 800; horizontal-alignment: right; }
                 }
                 HorizontalLayout {
-                    Text { text: "Заряд LiFePO4 (ручний)"; color: #c4d5e7; font-size: 12px; }
+                    Text { text: "Заряд (ручний)"; color: #d6deea; font-size: 12px; }
                     Slider {
                         minimum: 0; maximum: 100; value: root.soc;
                         released(value) => { root.soc = value; root.settings-changed(); }
                     }
-                    Text { text: root.soc-text; color: #42e3a1; font-size: 14px; }
+                    Text { text: root.soc-text; color: #51e5ac; font-size: 13px; }
                 }
                 HorizontalLayout {
-                    Text { text: "Навантаження UPS (ручне)"; color: #c4d5e7; font-size: 12px; }
+                    Text { text: "Навантаження UPS (ручне)"; color: #d6deea; font-size: 12px; }
                     Slider {
                         minimum: 50; maximum: 1000; value: root.watts;
                         released(value) => { root.watts = value; root.settings-changed(); }
                     }
-                    Text { text: root.watts-text; color: #f1f6ff; font-size: 14px; }
+                    Text { text: root.watts-text; color: #e7eef8; font-size: 13px; }
                 }
-                Text {
-                    text: "Ціль ≈100 Вт не гарантована: потрібен ватметр на 230 В або інший достовірний вимір навантаження UPS.";
-                    color: #d4b88a; font-size: 11px; wrap: word-wrap;
-                }
+                Text { text: "Ціль: 150–200 Вт від UPS. Ці цифри в калькуляторі — не вимірювання."; color: #d2b58c; font-size: 11px; }
             }
         }
+
         HorizontalLayout {
             spacing: 10px;
-            Text { text: "РЕЖИМ: " + root.plan-text; color: #42e3a1; font-size: 14px; font-weight: 700; }
-            Button { text: "Відновити початковий план Windows"; clicked => { root.restore-requested(); } }
+            Text { text: "ВІДНОВЛЕННЯ ПЛАНУ WINDOWS"; color: #9eb6d2; font-size: 12px; font-weight: 700; }
+            Button { text: "ПОВЕРНУТИ ПОЧАТКОВІ НАЛАШТУВАННЯ"; clicked => { root.restore-requested(); } }
         }
+
         Rectangle {
-            background: #152637;
-            border-radius: 8px;
-            VerticalLayout {
-                padding: 12px;
-                Text { text: root.status-text; color: #c5dfef; font-size: 13px; wrap: word-wrap; }
-            }
+            background: #132c3c;
+            border-radius: 9px;
+            height: 43px;
+            Text { text: root.status-text; color: #bce5e5; font-size: 12px; vertical-alignment: center; wrap: word-wrap; x: 12px; width: parent.width - 24px; }
         }
     }
 }
