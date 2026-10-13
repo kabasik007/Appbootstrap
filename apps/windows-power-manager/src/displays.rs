@@ -1,92 +1,155 @@
-//! Best-effort DDC/CI VCP 0xD6 control of *secondary* external monitors.
-//! Never sends a power command to the Windows primary monitor.
-//! Unsupported display connections are skipped. Users must opt-in with a button.
-//! Some monitors cannot wake via DDC/CI once sleeping; use their physical button.
+//! Windows 11 display topology, not DDC/CI physical monitor power.
+//! Unlike DDC/CI, DisplaySwitch removes inactive displays from the desktop
+//! so windows do not remain on an invisible-but-logically-connected screen.
+//! The main application enforces a timed preview and automatically restores
+//! extended mode unless the user confirms.
 #[cfg(windows)]
 mod platform {
-    use std::mem::size_of;
+    use std::{
+        mem::size_of,
+        os::windows::process::CommandExt,
+        process::Command,
+        ptr,
+    };
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const DISPLAY_DEVICE_ATTACHED_TO_DESKTOP: u32 = 0x0000_0001;
+    const DISPLAY_DEVICE_PRIMARY_DEVICE: u32 = 0x0000_0004;
+    const SM_CMONITORS: i32 = 80;
 
     #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    struct Rect { left: i32, top: i32, right: i32, bottom: i32 }
-    #[repr(C)]
-    struct MonitorInfo {
-        size: u32, monitor: Rect, work: Rect, flags: u32
+    struct DisplayDeviceW {
+        cb: u32,
+        device_name: [u16; 32],
+        device_string: [u16; 128],
+        state_flags: u32,
+        device_id: [u16; 128],
+        device_key: [u16; 128],
     }
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    struct PhysicalMonitor {
-        handle: isize,
-        description: [u16; 128],
+
+    impl Default for DisplayDeviceW {
+        fn default() -> Self {
+            Self {
+                cb: size_of::<Self>() as u32,
+                device_name: [0; 32],
+                device_string: [0; 128],
+                state_flags: 0,
+                device_id: [0; 128],
+                device_key: [0; 128],
+            }
+        }
     }
-    const MONITORINFOF_PRIMARY: u32 = 1;
+
     #[link(name = "user32")]
     extern "system" {
-        fn EnumDisplayMonitors(hdc: isize, rect: *const Rect,
-            callback: Option<unsafe extern "system" fn(isize, isize, *mut Rect, isize) -> i32>,
-            data: isize) -> i32;
-        fn GetMonitorInfoW(monitor: isize, info: *mut MonitorInfo) -> i32;
+        fn EnumDisplayDevicesW(device: *const u16, device_index: u32,
+            display_device: *mut DisplayDeviceW, flags: u32) -> i32;
+        fn GetSystemMetrics(index: i32) -> i32;
     }
-    #[link(name = "dxva2")]
-    extern "system" {
-        fn GetNumberOfPhysicalMonitorsFromHMONITOR(monitor: isize, count: *mut u32) -> i32;
-        fn GetPhysicalMonitorsFromHMONITOR(monitor: isize, count: u32,
-            physical_monitors: *mut PhysicalMonitor) -> i32;
-        fn DestroyPhysicalMonitors(count: u32, physical_monitors: *mut PhysicalMonitor) -> i32;
-        fn SetVCPFeature(monitor: isize, code: u8, value: u32) -> i32;
+
+    fn utf16(bytes: &[u16]) -> String {
+        let n = bytes.iter().position(|x| *x == 0).unwrap_or(bytes.len());
+        String::from_utf16_lossy(&bytes[..n])
     }
-    unsafe extern "system" fn gather(monitor: isize, _hdc: isize,
-        _rect: *mut Rect, context: isize) -> i32 {
-        let items = &mut *(context as *mut Vec<isize>);
-        let mut info = MonitorInfo {
-            size: size_of::<MonitorInfo>() as u32,
-            monitor: Rect::default(), work: Rect::default(), flags: 0
-        };
-        if GetMonitorInfoW(monitor, &mut info) != 0
-            && (info.flags & MONITORINFOF_PRIMARY) == 0 {
-            items.push(monitor);
-        }
-        1
-    }
-    pub fn set_power(on: bool) -> Result<String, String> {
-        let mut secondary = Vec::<isize>::new();
-        let ok = unsafe {
-            EnumDisplayMonitors(0, std::ptr::null(), Some(gather),
-                (&mut secondary as *mut Vec<isize>) as isize)
-        };
-        if ok == 0 { return Err("Windows не надала список моніторів".into()); }
-        if secondary.is_empty() { return Err("Другорядних моніторів не знайдено".into()); }
-        let mut attempted = 0;
-        let mut succeeded = 0;
-        for monitor in secondary {
-            let mut count = 0u32;
-            if unsafe { GetNumberOfPhysicalMonitorsFromHMONITOR(monitor, &mut count) } == 0
-                || count == 0 || count > 16 { continue; }
-            let empty = PhysicalMonitor { handle: 0, description: [0; 128] };
-            let mut physical = vec![empty; count as usize];
-            let found = unsafe {
-                GetPhysicalMonitorsFromHMONITOR(monitor, count, physical.as_mut_ptr())
-            };
-            if found == 0 { continue; }
-            for target in &physical {
-                attempted += 1;
-                // VESA DDC/CI power mode (0xD6): 0x01 on, 0x04 off.
-                if unsafe { SetVCPFeature(target.handle, 0xD6, if on { 1 } else { 4 }) } != 0 {
-                    succeeded += 1;
-                }
+
+    pub fn primary_summary() -> String {
+        let count = unsafe { GetSystemMetrics(SM_CMONITORS) }.max(0);
+        let mut primary = String::new();
+        let mut i: u32 = 0;
+        while i < 24 {
+            let mut device = DisplayDeviceW::default();
+            if unsafe { EnumDisplayDevicesW(ptr::null(), i, &mut device, 0) } == 0 {
+                break;
             }
-            unsafe { DestroyPhysicalMonitors(count, physical.as_mut_ptr()); }
+            if device.state_flags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP != 0
+                && device.state_flags & DISPLAY_DEVICE_PRIMARY_DEVICE != 0
+            {
+                primary = format!("{} · {}",
+                    utf16(&device.device_name),
+                    utf16(&device.device_string));
+                break;
+            }
+            i += 1;
         }
-        if succeeded == 0 {
-            return Err("Жоден додатковий монітор не підтвердив DDC/CI. Перевір DDC/CI в меню дисплея".into());
+        if primary.is_empty() {
+            format!("Windows: {count} активних екранів; головний не визначений")
+        } else {
+            format!("Windows: {count} активних екранів · головний: {primary}")
         }
-        Ok(format!("DDC/CI: команду {} прийняли {succeeded}/{attempted} моніторів. Основний не чіпали",
-            if on { "відновлення" } else { "сну" }))
+    }
+
+    pub fn graphics_adapter_name() -> Option<String> {
+        let mut i: u32 = 0;
+        let mut fallback = None;
+        while i < 24 {
+            let mut device = DisplayDeviceW::default();
+            if unsafe { EnumDisplayDevicesW(ptr::null(), i, &mut device, 0) } == 0 {
+                break;
+            }
+            let name = utf16(&device.device_string);
+            if name.contains("Radeon") || name.contains("NVIDIA") || name.contains("GeForce") {
+                return Some(name);
+            }
+            if fallback.is_none() && device.state_flags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP != 0
+                && !name.is_empty() && !name.contains("Microsoft Basic")
+            {
+                fallback = Some(name);
+            }
+            i += 1;
+        }
+        fallback
+    }
+
+    // Windows 11 DisplaySwitch supports the numeric PC screen only (1)
+    // and Extend (3) modes. These are topology switches, not system sleep.
+    // Do not launch DDC/CI physical off commands.
+    fn switch(mode: &str) -> Result<(), String> {
+        let result = Command::new("DisplaySwitch.exe")
+            .arg(mode)
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()
+            .map_err(|e| format!("DisplaySwitch.exe не запустився: {e}"))?;
+        if !result.success() {
+            return Err(format!("DisplaySwitch {mode} завершився з помилкою {result}"));
+        }
+        Ok(())
+    }
+
+    pub fn preview_primary() -> Result<String, String> {
+        switch("1")?;
+        Ok("Попередній перегляд одного екрана. Підтвердь за 20 секунд, інакше повернуться додаткові екрани.".into())
+    }
+
+    pub fn restore_extended() -> Result<String, String> {
+        switch("3")?;
+        Ok("Запитано розширення екранів Windows. Перевір їх порядок і частоти в параметрах дисплея.".into())
     }
 }
-pub fn set_secondary_power(on: bool) -> Result<String, String> {
+
+pub fn primary_summary() -> String {
     #[cfg(windows)]
-    { platform::set_power(on) }
+    { platform::primary_summary() }
     #[cfg(not(windows))]
-    { let _ = on; Err("Керування дисплеями можливе тільки у Windows".into()) }
+    { "Екрани Windows недоступні".to_owned() }
+}
+
+pub fn graphics_adapter_name() -> Option<String> {
+    #[cfg(windows)]
+    { platform::graphics_adapter_name() }
+    #[cfg(not(windows))]
+    { None }
+}
+
+pub fn preview_primary() -> Result<String, String> {
+    #[cfg(windows)]
+    { platform::preview_primary() }
+    #[cfg(not(windows))]
+    { Err("Потрібна Windows 11".to_owned()) }
+}
+
+pub fn restore_extended() -> Result<String, String> {
+    #[cfg(windows)]
+    { platform::restore_extended() }
+    #[cfg(not(windows))]
+    { Err("Потрібна Windows 11".to_owned()) }
 }
