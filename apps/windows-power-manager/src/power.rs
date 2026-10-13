@@ -13,16 +13,27 @@ impl Mode {
         match self { Self::Eco => "65", Self::Emergency => "40" }
     }
     #[cfg(windows)]
-    fn display_idle(self) -> &'static str {
-        match self { Self::Eco => "120", Self::Emergency => "60" }
-    }
-    #[cfg(windows)]
     fn disk_idle(self) -> &'static str {
         match self { Self::Eco => "120", Self::Emergency => "60" }
     }
     #[cfg(windows)]
     fn name(self) -> &'static str {
         match self { Self::Eco => "Zilla PM Eco", Self::Emergency => "Zilla PM Emergency" }
+    }
+    #[cfg(windows)]
+    fn settings(self) -> [[&'static str; 4]; 10] {
+        [
+            ["SUB_PROCESSOR", "PROCTHROTTLEMAX", self.cpu_max(), "AC"],
+            ["SUB_PROCESSOR", "PROCTHROTTLEMAX", self.cpu_max(), "DC"],
+            ["SUB_VIDEO", "VIDEOIDLE", "0", "AC"],
+            ["SUB_VIDEO", "VIDEOIDLE", "0", "DC"],
+            ["SUB_DISK", "DISKIDLE", self.disk_idle(), "AC"],
+            ["SUB_DISK", "DISKIDLE", self.disk_idle(), "DC"],
+            ["SUB_SLEEP", "STANDBYIDLE", "0", "AC"],
+            ["SUB_SLEEP", "STANDBYIDLE", "0", "DC"],
+            ["SUB_SLEEP", "HIBERNATEIDLE", "0", "AC"],
+            ["SUB_SLEEP", "HIBERNATEIDLE", "0", "DC"],
+        ]
     }
 }
 #[derive(Default)]
@@ -63,14 +74,9 @@ impl PowerPlans {
                 id.clone()
             } else {
                 let id = guid(&command(&["/duplicatescheme", base])?)?;
-                let changes: [[&str; 4]; 6] = [
-                    ["SUB_PROCESSOR", "PROCTHROTTLEMAX", mode.cpu_max(), "AC"],
-                    ["SUB_PROCESSOR", "PROCTHROTTLEMAX", mode.cpu_max(), "DC"],
-                    ["SUB_VIDEO", "VIDEOIDLE", mode.display_idle(), "AC"],
-                    ["SUB_VIDEO", "VIDEOIDLE", mode.display_idle(), "DC"],
-                    ["SUB_DISK", "DISKIDLE", mode.disk_idle(), "AC"],
-                    ["SUB_DISK", "DISKIDLE", mode.disk_idle(), "DC"]
-                ];
+                // Disable inactivity-triggered system sleep, hibernation and screen blanking
+                // only on disposable clones. The original Windows scheme is unchanged.
+                let changes = mode.settings();
                 let configuration = (|| -> Result<(), String> {
                     command(&["/changename", &id, mode.name()])?;
                     for [sub, setting, value, supply] in changes {
@@ -88,8 +94,8 @@ impl PowerPlans {
             };
             command(&["/setactive", &id])?;
             let name = match mode {
-                Mode::Eco => "Eco: CPU до 65%, екрани/HDD у простої через 120 c",
-                Mode::Emergency => "Emergency: CPU до 40%, екрани/HDD через 60 c"
+                Mode::Eco => "Eco: CPU до 65%, HDD 120 c; сон/гібернація Windows вимкнені",
+                Mode::Emergency => "Emergency: CPU до 40%, HDD 60 c; сон/гібернація Windows вимкнені"
             };
             Ok(name.to_owned())
         }
@@ -124,5 +130,38 @@ impl Drop for PowerPlans {
                 }
             }
         }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::{Mode, PowerPlans};
+
+    #[test]
+    fn modes_disable_sleep_hibernation_and_automatic_screen_blank() {
+        for mode in [Mode::Eco, Mode::Emergency] {
+            let settings = mode.settings();
+            for supply in ["AC", "DC"] {
+                for (group, setting) in [
+                    ("SUB_SLEEP", "STANDBYIDLE"),
+                    ("SUB_SLEEP", "HIBERNATEIDLE"),
+                    ("SUB_VIDEO", "VIDEOIDLE"),
+                ] {
+                    assert!(
+                        settings.contains(&[group, setting, "0", supply]),
+                        "missing no-sleep setting: {group}/{setting}/{supply}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mode_cpu_caps_remain_distinct_and_construction_has_no_os_side_effects() {
+        assert_eq!(Mode::Eco.cpu_max(), "65");
+        assert_eq!(Mode::Emergency.cpu_max(), "40");
+        let plans = PowerPlans::default();
+        assert!(plans.original.is_none());
+        assert!(plans.clones.is_empty());
     }
 }
