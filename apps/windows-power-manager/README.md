@@ -25,9 +25,19 @@ The Windows EXE uses the Windows GUI subsystem. Invoked `powercfg` and read-only
 
 ## Diagnostics (read-only)
 
-Download `scripts/diagnose_windows11.ps1`, then run it from a PowerShell window:
+Download **Raw** `scripts/diagnose_windows11.ps1`, saved as **UTF-8 with BOM** for compatibility with Windows PowerShell 5.1. The CI uses Windows PowerShell 5.1 to verify the BOM, parse syntax, and actually produce a report.
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\diagnose_windows11.ps1
+For a script saved to H:\\, run:
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "H:\\diagnose_windows11.ps1"
+
+If an older locally saved script shows mojibake such as `Р”Р°С‚Р°`, convert its bytes once using PowerShell 5.1:
+
+    $path = 'H:\\diagnose_windows11.ps1'
+    $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($true)))
+
+A `Set-Location H:\\" ` error shown when opening a PowerShell shell normally comes from the user's PowerShell profile, not this script. The `-NoProfile` argument avoids that startup profile for diagnostics.
 
 The file `Zilla_Diagnostic_Windows11.txt` is created on your Desktop. It lists CPU/GPU identity, Windows primary monitor and active display IDs, powercfg AC/DC values and available power sensors; no sleep or display changes.
 
