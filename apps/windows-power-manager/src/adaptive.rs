@@ -1,7 +1,5 @@
 //! Opt-in, bounded adaptive CPU ceiling. This reacts to CPU load, NOT to actual UPS watts.
 //! Consecutive samples and cooldown prevent frequent powercfg calls.
-use crate::power::{MAX_CPU_PERCENT, MIN_CPU_PERCENT};
-
 #[derive(Debug, Clone)]
 pub struct AdaptiveCpu {
     active: bool,
@@ -29,7 +27,7 @@ impl AdaptiveCpu {
     }
 
     pub fn enable(&mut self, initial: u8) {
-        self.cap = initial.clamp(MIN_CPU_PERCENT, MAX_CPU_PERCENT);
+        self.cap = initial.clamp(35, 95);
         self.active = true;
         self.reset_counters();
     }
