@@ -1,4 +1,6 @@
+mod adaptive;
 mod displays;
+mod gpu;
 mod model;
 mod power;
 
@@ -7,124 +9,321 @@ slint::include_modules!();
 
 #[cfg(windows)]
 #[derive(Clone, Copy)]
-enum Action { Normal, Eco, Emergency, SecondarySleep, SecondaryWake, Quit }
+enum Action {
+    Preset(power::Preset),
+    Manual(u8),
+    AutoToggle,
+    ObserveCpu(f32),
+    SecondaryOff,
+    SecondaryOn,
+    AllDisplaysOff,
+    RestoreWindows,
+    Quit,
+}
+
+#[cfg(windows)]
+struct Feedback {
+    message: String,
+    profile: Option<String>,
+    cap: Option<u8>,
+    automatic: Option<bool>,
+}
+
+#[cfg(windows)]
+impl Feedback {
+    fn message(message: String) -> Self {
+        Self {
+            message,
+            profile: None,
+            cap: None,
+            automatic: None,
+        }
+    }
+
+    fn profile(message: String, name: &str, cap: u8, automatic: bool) -> Self {
+        Self {
+            message,
+            profile: Some(name.to_owned()),
+            cap: Some(cap),
+            automatic: Some(automatic),
+        }
+    }
+}
 
 #[cfg(windows)]
 fn estimate(ui: &MainWindow) {
     let soc = ui.get_soc();
     let watts = ui.get_watts();
     ui.set_soc_text(format!("{soc:.0}%").into());
-    ui.set_watts_text(format!("{watts:.0} W").into());
+    ui.set_watts_text(format!("{watts:.0} Вт (ручні)").into());
     ui.set_runtime_text(model::BatteryModel::default().label(soc as f64, watts as f64).into());
 }
 
 #[cfg(windows)]
 fn submit(tx: &std::sync::mpsc::Sender<Action>, action: Action, ui: &MainWindow) {
     if tx.send(action).is_err() {
-        ui.set_status_text("Не вдалося запустити фонову команду".into());
+        ui.set_status_text("Фоновий потік керування недоступний".into());
     } else {
-        ui.set_status_text("Застосовую параметри...".into());
+        ui.set_status_text("Застосовую налаштування Windows...".into());
     }
+}
+
+#[cfg(windows)]
+fn feedback_to_ui(weak: slint::Weak<MainWindow>, feedback: Result<Feedback, String>) {
+    let _ = slint::invoke_from_event_loop(move || {
+        if let Some(ui) = weak.upgrade() {
+            match feedback {
+                Ok(feedback) => {
+                    ui.set_status_text(feedback.message.into());
+                    if let Some(label) = feedback.profile {
+                        ui.set_plan_text(label.into());
+                    }
+                    if let Some(cap) = feedback.cap {
+                        ui.set_cpu_limit(cap.into());
+                        ui.set_limit_text(format!("CPU ≤ {cap}%").into());
+                    }
+                    if let Some(automatic) = feedback.automatic {
+                        ui.set_auto_text(if automatic {
+                            "АВТО: УВІМКНЕНО".into()
+                        } else {
+                            "АВТО: ВИМКНЕНО".into()
+                        });
+                    }
+                }
+                Err(message) => ui.set_status_text(format!("ПОМИЛКА: {message}").into()),
+            }
+        }
+    });
 }
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use slint::ComponentHandle;
-    use std::sync::mpsc;
-    use std::time::Duration;
+    use std::{sync::mpsc, time::Duration};
 
     let ui = MainWindow::new()?;
     estimate(&ui);
     let weak = ui.as_weak();
     ui.on_settings_changed(move || {
-        if let Some(ui) = weak.upgrade() { estimate(&ui); }
+        if let Some(ui) = weak.upgrade() {
+            estimate(&ui);
+        }
     });
 
     let (tx, rx) = mpsc::channel::<Action>();
     let weak = ui.as_weak();
     let control_thread = std::thread::spawn(move || {
         let mut plans = power::PowerPlans::default();
-        let mut slept_secondary = false;
+        let mut auto = adaptive::AdaptiveCpu::default();
+        let mut secondary_off = false;
         while let Ok(action) = rx.recv() {
-            if matches!(action, Action::Quit) { break; }
-            let result: Result<(String, Option<&'static str>), String> = match action {
-                Action::Normal => {
-                    let result = plans.normal();
-                    if slept_secondary && displays::set_secondary_power(true).is_ok() {
-                        slept_secondary = false;
+            if matches!(action, Action::Quit) {
+                break;
+            }
+            let feedback: Result<Feedback, String> = match action {
+                Action::Preset(profile) => {
+                    let result = plans.apply_preset(profile);
+                    if result.is_ok() {
+                        auto.disable();
                     }
-                    result.map(|s| (s, Some("Normal")))
-                },
-                Action::Eco => plans.apply(power::Mode::Eco).map(|s| (s, Some("Eco"))),
-                Action::Emergency => plans.apply(power::Mode::Emergency).map(|s| (s, Some("Emergency"))),
-                Action::SecondarySleep => {
-                    let result = displays::set_secondary_power(false);
-                    if result.is_ok() { slept_secondary = true; }
-                    result.map(|s| (s, None))
-                },
-                Action::SecondaryWake => {
-                    let result = displays::set_secondary_power(true);
-                    if result.is_ok() { slept_secondary = false; }
-                    result.map(|s| (s, None))
-                },
-                Action::Quit => unreachable!(),
-            };
-            let ui_weak = weak.clone();
-            let _ = slint::invoke_from_event_loop(move || {
-                if let Some(ui) = ui_weak.upgrade() {
-                    match result {
-                        Ok((message, mode)) => {
-                            ui.set_status_text(message.into());
-                            if let Some(mode) = mode { ui.set_plan_text(mode.into()); }
-                        }
-                        Err(err) => ui.set_status_text(format!("ПОМИЛКА: {err}").into())
+                    result.map(|message| {
+                        Feedback::profile(message, profile.label(), profile.cpu_cap(), false)
+                    })
+                }
+                Action::Manual(cap) => {
+                    let result = plans.apply_custom(cap);
+                    if result.is_ok() {
+                        auto.disable();
+                    }
+                    result.map(|message| Feedback::profile(message, "Ручний", cap, false))
+                }
+                Action::AutoToggle => {
+                    if auto.active() {
+                        auto.disable();
+                        Ok(Feedback {
+                            message: "Адаптація зупинена. Поточний ліміт CPU збережений".to_owned(),
+                            profile: Some("Ручний".to_owned()),
+                            cap: plans.current_cap(),
+                            automatic: Some(false),
+                        })
+                    } else {
+                        let cap = plans.current_cap().unwrap_or(55).clamp(35, 95);
+                        plans.apply_adaptive(cap).map(|message| {
+                            auto.enable(cap);
+                            Feedback::profile(
+                                format!("{message}. Авто: +10% при навантаженні, -5% у простої"),
+                                "Авто",
+                                cap,
+                                true,
+                            )
+                        })
                     }
                 }
-            });
+                Action::ObserveCpu(usage) => {
+                    if let Some(next_cap) = auto.observe(usage) {
+                        let result = plans.apply_adaptive(next_cap);
+                        match result {
+                            Ok(message) => Ok(Feedback::profile(message, "Авто", next_cap, true)),
+                            Err(message) => {
+                                auto.disable();
+                                Err(format!(
+                                    "{message}; автоматичний режим вимкнено"
+                                ))
+                            }
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                Action::SecondaryOff => {
+                    let result = displays::set_secondary_power(false);
+                    if result.is_ok() {
+                        secondary_off = true;
+                    }
+                    result.map(Feedback::message)
+                }
+                Action::SecondaryOn => {
+                    let result = displays::set_secondary_power(true);
+                    if result.is_ok() {
+                        secondary_off = false;
+                    }
+                    result.map(Feedback::message)
+                }
+                Action::AllDisplaysOff => {
+                    plans.ensure_awake_for_display_off()
+                        .and_then(|()| displays::turn_off_all())
+                        .map(Feedback::message)
+                }
+                Action::RestoreWindows => {
+                    let result = plans.normal();
+                    if secondary_off && displays::set_secondary_power(true).is_ok() {
+                        secondary_off = false;
+                    }
+                    if result.is_ok() {
+                        auto.disable();
+                    }
+                    result.map(|message| Feedback {
+                        message,
+                        profile: Some("Windows (початковий)".to_owned()),
+                        cap: None,
+                        automatic: Some(false),
+                    })
+                }
+                Action::Quit => unreachable!(),
+            };
+            feedback_to_ui(weak.clone(), feedback);
         }
-        // Drop of PowerPlans restores the original plan if our clone is still active.
-        // DDC/CI restores secondary monitors on normal exit (best effort).
-        if slept_secondary { let _ = displays::set_secondary_power(true); }
+        // Clean exit: secondary displays and original plan best-effort recovery.
+        if secondary_off {
+            let _ = displays::set_secondary_power(true);
+        }
+        // PowerPlans Drop re-activates original plan only if our clone is active.
     });
 
-    let normal_tx = tx.clone(); let normal_ui = ui.as_weak();
-    ui.on_normal_requested(move || {
-        if let Some(ui) = normal_ui.upgrade() { submit(&normal_tx, Action::Normal, &ui); }
+    let presets = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_preset_requested(move |id| {
+        let preset = match id {
+            0 => power::Preset::Maximum,
+            1 => power::Preset::Balanced,
+            2 => power::Preset::Minimum,
+            3 => power::Preset::Hard,
+            _ => return,
+        };
+        if let Some(ui) = weak.upgrade() {
+            submit(&presets, Action::Preset(preset), &ui);
+        }
     });
-    let eco_tx = tx.clone(); let eco_ui = ui.as_weak();
-    ui.on_eco_requested(move || {
-        if let Some(ui) = eco_ui.upgrade() { submit(&eco_tx, Action::Eco, &ui); }
+
+    let manual_tx = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_manual_requested(move |value| {
+        if let Some(ui) = weak.upgrade() {
+            let cap = value.round().clamp(
+                f32::from(power::MIN_CPU_PERCENT),
+                f32::from(power::MAX_CPU_PERCENT),
+            ) as u8;
+            submit(&manual_tx, Action::Manual(cap), &ui);
+        }
     });
-    let emergency_tx = tx.clone(); let emergency_ui = ui.as_weak();
-    ui.on_emergency_requested(move || {
-        if let Some(ui) = emergency_ui.upgrade() { submit(&emergency_tx, Action::Emergency, &ui); }
+
+    let auto_tx = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_auto_requested(move || {
+        if let Some(ui) = weak.upgrade() {
+            submit(&auto_tx, Action::AutoToggle, &ui);
+        }
     });
-    let off_tx = tx.clone(); let off_ui = ui.as_weak();
+
+    let off_tx = tx.clone();
+    let weak = ui.as_weak();
     ui.on_secondary_sleep_requested(move || {
-        if let Some(ui) = off_ui.upgrade() { submit(&off_tx, Action::SecondarySleep, &ui); }
+        if let Some(ui) = weak.upgrade() {
+            submit(&off_tx, Action::SecondaryOff, &ui);
+        }
     });
-    let on_tx = tx.clone(); let on_ui = ui.as_weak();
+
+    let on_tx = tx.clone();
+    let weak = ui.as_weak();
     ui.on_secondary_wake_requested(move || {
-        if let Some(ui) = on_ui.upgrade() { submit(&on_tx, Action::SecondaryWake, &ui); }
+        if let Some(ui) = weak.upgrade() {
+            submit(&on_tx, Action::SecondaryOn, &ui);
+        }
+    });
+
+    let all_tx = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_all_displays_off_requested(move || {
+        if let Some(ui) = weak.upgrade() {
+            submit(&all_tx, Action::AllDisplaysOff, &ui);
+        }
+    });
+
+    let restore_tx = tx.clone();
+    let weak = ui.as_weak();
+    ui.on_restore_requested(move || {
+        if let Some(ui) = weak.upgrade() {
+            submit(&restore_tx, Action::RestoreWindows, &ui);
+        }
     });
 
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let weak = ui.as_weak();
+    let cpu_tx = tx.clone();
     let metrics_thread = std::thread::spawn(move || {
         use sysinfo::System;
         let mut system = System::new();
         system.refresh_cpu_usage();
-        while stop_rx.recv_timeout(Duration::from_secs(3)).is_err() {
+        let mut count: u64 = 0;
+        loop {
+            if stop_rx.recv_timeout(Duration::from_secs(3)).is_ok() {
+                break;
+            }
             system.refresh_cpu_usage();
             system.refresh_memory();
-            let cpu = format!("CPU: {:.0}% (не вати)", system.global_cpu_usage());
-            let memory = format!("RAM: {:.1}/{:.1} ГБ",
-                system.used_memory() as f64 / 1e9, system.total_memory() as f64 / 1e9);
-            let ui_weak = weak.clone();
+            let utilization = system.global_cpu_usage();
+            let _ = cpu_tx.send(Action::ObserveCpu(utilization));
+            let cpu_text = format!("CPU: {utilization:.0}% використання (не Вт)");
+            let ram_text = format!(
+                "RAM: {:.1}/{:.1} ГБ",
+                system.used_memory() as f64 / 1e9,
+                system.total_memory() as f64 / 1e9
+            );
+            // Probe the optional NVIDIA driver only every ~12 seconds.
+            let gpu_text = if count.is_multiple_of(4) {
+                Some(gpu::summary())
+            } else {
+                None
+            };
+            count += 1;
+            let weak = weak.clone();
             let _ = slint::invoke_from_event_loop(move || {
-                if let Some(ui) = ui_weak.upgrade() {
-                    ui.set_cpu_text(cpu.into());
-                    ui.set_ram_text(memory.into());
+                if let Some(ui) = weak.upgrade() {
+                    ui.set_cpu_text(cpu_text.into());
+                    ui.set_ram_text(ram_text.into());
+                    if let Some(gpu_text) = gpu_text {
+                        ui.set_gpu_text(gpu_text.into());
+                    }
                 }
             });
         }
@@ -140,5 +339,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(not(windows))]
 fn main() {
-    eprintln!("Zilla Power Manager supports Windows 10/11. Pure calculation tests are portable.");
+    eprintln!("Zilla Power Manager supports Windows 10/11. Model tests are portable.");
 }
