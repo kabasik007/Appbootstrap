@@ -5,7 +5,9 @@
 #[cfg(windows)]
 use regex::Regex;
 #[cfg(windows)]
-use std::process::Command;
+use std::{os::windows::process::CommandExt, process::Command};
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub const MIN_CPU_PERCENT: u8 = 20;
 pub const MAX_CPU_PERCENT: u8 = 100;
@@ -70,6 +72,7 @@ pub struct PowerPlans {
 fn command(args: &[&str]) -> Result<String, String> {
     let output = Command::new("powercfg")
         .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("Не вдалося запустити powercfg: {e}"))?;
     if !output.status.success() {
