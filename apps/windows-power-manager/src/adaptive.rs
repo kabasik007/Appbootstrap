@@ -103,9 +103,9 @@ mod tests {
     fn increases_only_after_sustained_load() {
         let mut adaptive = AdaptiveCpu::default();
         adaptive.enable(55);
-        assert_eq!(adaptive.observe(90.0), None);
-        assert_eq!(adaptive.observe(90.0), None);
-        assert_eq!(adaptive.observe(90.0), Some(65));
+        assert_eq!(adaptive.observe_with_peak(90.0, 90.0), None);
+        assert_eq!(adaptive.observe_with_peak(90.0, 90.0), None);
+        assert_eq!(adaptive.observe_with_peak(90.0, 90.0), Some(65));
     }
 
     #[test]
@@ -113,11 +113,11 @@ mod tests {
         let mut adaptive = AdaptiveCpu::default();
         adaptive.enable(65);
         for _ in 0..9 {
-            assert_eq!(adaptive.observe(10.0), None);
+            assert_eq!(adaptive.observe_with_peak(10.0, 10.0), None);
         }
-        assert_eq!(adaptive.observe(10.0), Some(60));
+        assert_eq!(adaptive.observe_with_peak(10.0, 10.0), Some(60));
         for _ in 0..4 {
-            assert_eq!(adaptive.observe(10.0), None);
+            assert_eq!(adaptive.observe_with_peak(10.0, 10.0), None);
         }
     }
 
@@ -126,7 +126,7 @@ mod tests {
         let mut adaptive = AdaptiveCpu::default();
         adaptive.enable(50);
         for usage in [90.0, 10.0, 70.0, f32::NAN, 90.0, 10.0] {
-            assert_eq!(adaptive.observe(usage), None);
+            assert_eq!(adaptive.observe_with_peak(usage, usage), None);
         }
         adaptive.disable();
         assert!(!adaptive.active());
@@ -163,13 +163,13 @@ mod tests {
         let mut adaptive = AdaptiveCpu::default();
         adaptive.enable(250);
         for _ in 0..100 {
-            if let Some(cap) = adaptive.observe(99.0) {
+            if let Some(cap) = adaptive.observe_with_peak(99.0, 99.0) {
                 assert!(cap <= 95);
             }
         }
         adaptive.enable(1);
         for _ in 0..200 {
-            if let Some(cap) = adaptive.observe(0.0) {
+            if let Some(cap) = adaptive.observe_with_peak(0.0, 0.0) {
                 assert!(cap >= 35);
             }
         }
