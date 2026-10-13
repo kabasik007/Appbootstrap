@@ -6,7 +6,7 @@
 - [x] Opt-in AUTO with conservative load thresholds and cooldown
 - [x] Temporary reversible Windows power plan: never alter original
 - [x] No automatic system sleep, hibernate or forced shutdown
-- [x] Secondary-monitor DDC/CI controls with the primary always visible; removed unsafe all-screens-off command
+- [x] Removed DDC/CI physical monitor-off commands that left invisible logical displays. Added Windows 11 DisplaySwitch (1/3) preview, 20-second rollback, explicit confirmation, and extend recovery; hardware testing pending.
 - [x] CPU model/RAM stats, Windows WMI GPU model, optional AMD/NVIDIA & CPU package read-only power data from LibreHardwareMonitor WMI
 - [x] Manual LiFePO4 runtime calculation; never pretend watts are measured
 - [ ] Verify current commit builds in Windows GitHub Actions
@@ -17,14 +17,14 @@
 - [x] Redesigned colored profile tiles, clearer battery and restore sections
 - [ ] Validate LibreHardwareMonitor WMI with AMD RX 6900 on user's Windows 11 hardware
 - [ ] Compare AMD Adrenalin GPU TBP, component sensors and external UPS input watts
-- [ ] Confirm secondary monitor DDC/CI recovery per connected display
+- [ ] Confirm exact Windows primary screen mapping for four monitors, and compare /extend restored positions and refresh rates
 
 ## v0.3 — measured power target
 - [ ] Read-only JK BMS Bluetooth integration and stale telemetry checks
 - [ ] Optional physical wall-wattmeter or verified UPS power telemetry
 - [ ] Goal-oriented 200 W / 150 W total AC profile with verified wattmeter and bounded adjustments
 - [ ] GPU vendor model / ability detection, optional validated power limit with opt-in and rollback
-- [ ] Per-monitor DDC/CI compatibility/identification and hotplug
+- [ ] Stable per-display selection using native Windows topology APIs with exact restore snapshot and hotplug handling
 
 ## v0.4 — release polish
 - [ ] System tray, startup, profiles persistence and notifications
