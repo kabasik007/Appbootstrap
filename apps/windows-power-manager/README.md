@@ -5,7 +5,7 @@ Native desktop power manager with reversible Windows power scheme changes. Inten
 ## Power controls
 - Maximum 100%, Balanced 80%, Minimum 55% and Hard 25% CPU ceiling presets, now displayed as colored profile tiles.
 - Slider: CPU max processor state 20–100%, changes applied when slider is released.
-- AUTO, off by default: sustained high CPU usage raises CPU limit by 10%, sustained low usage reduces it by 5%, with a cooldown. AUTO bounds are 35–95%. Manual controls override it.
+- AUTO, off by default: uses both global CPU usage and the busiest logical CPU. Sustained >85% utilization of **any** logical core (even with ~2% global load on this 48-thread dual Xeon system) raises the cap by 10%. It only lowers the cap after sustained low global load and low peak-core load, with a cooldown. AUTO bounds are 35–95%. Manual controls override it.
 - Safe 4-monitor topology switch: **One screen (20-second preview)**, **Keep**, **Restore extended** using Windows 11 DisplaySwitch numeric modes 1/3. Does not send DDC/CI physical-off commands. Timed preview automatically tries to restore extended mode unless confirmed; normal exit also restores extended mode if Zilla changed it.
 - No all-screens-off control: it was intentionally removed to avoid leaving the user without a visible monitor. Only reversible Windows topology controls remain.
 - CPU model and live load, RAM usage, and read-only GPU model through Windows WMI. Optional AMD/NVIDIA GPU power/utilization and CPU package power are read from **LibreHardwareMonitor** sensors when that application is running and exposes WMI. Without these sensors, watt fields display `н/д` (not guessed).
@@ -64,4 +64,4 @@ Test both AC and DC profile readback (powercfg /query SCHEME_CURRENT SUB_SLEEP S
 
 Windows primary screen is a logical designation which can differ from the physical screen you think of as main. If the Windows primary monitor is physically switched off, one-screen preview may temporarily show no visible image; after 20 seconds the app attempts to restore extended mode. The numeric `DisplaySwitch` arguments are Windows 11-specific; restore extended mode can change custom monitor placement. Check Windows Settings → System → Display and Win+P if the desktop looks wrong. The app does not physically cut monitor power. Mechanical HDD standby may increase wear if used frequently. No drivers, BMS writes or GPU voltage modifications are performed.
 
-More details: docs/POWER_POLICY.md and docs/ROADMAP.md.
+For the measured machine (2 Xeon E5-2678 v3, Radeon RX 6900 XT, 3 active Windows displays and one additional physical monitor), see `docs/HARDWARE_BASELINE_WINDOWS11_UA.md`. Real GPU TBP remains unavailable without working ADLX or a sensor provider; no total AC watts are guessed. Diagnostic script also reports physical CPU socket count, DIMM count and Windows display-primary identification.\n\nMore details: docs/POWER_POLICY.md and docs/ROADMAP.md.
