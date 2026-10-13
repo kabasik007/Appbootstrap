@@ -4,12 +4,12 @@ Native Windows 10/11 UPS companion written in Rust + Slint, following the deskto
 
 ## What v0.1 does
 
-- Three manual modes: Normal, Eco (processor performance ceiling 65%, idle screen/HDD 120 seconds), Emergency (40%, 60 seconds).
+- Three manual modes: Normal, Eco (CPU ceiling 65%, HDD idle 120 s), Emergency (CPU ceiling 40%, HDD idle 60 s). In the cloned Eco/Emergency plans, automatic Windows sleep/hibernate and display blanking are disabled (both AC/DC).
 - Changes only duplicates of the original Windows power plan; Normal and clean exit restore the previous plan.
 - Manual secondary monitor sleep / wake via VESA DDC/CI (VCP 0xD6). Windows' primary monitor is never targeted.
 - Displays CPU utilization and RAM usage; runs sampling off the UI thread.
 - Estimates runtime for a *configured* 4S LiFePO4 334 Ah battery and a KEMOT 12 V inverter. SOC and load are MANUAL; no fake metering.
-- All functions offline. No process kills, registry tuning, driver install or automatic power events yet.
+- All functions offline. No process kills, registry tuning, driver install, forced PC sleep/hibernate or automatic power events. The manual secondary-monitor DDC/CI off/on control is not Windows system sleep.
 
 ## Build and test
 
@@ -28,7 +28,7 @@ Build artifacts: target/release/zilla-power-manager.exe. The Windows GitHub Acti
 
 - Desktop computers running on an external 230 V KEMOT UPS appear AC-powered to Windows even when KEMOT is running from the battery. Automatic UPS transfer detection is NOT implemented.
 - 334 Ah is the JK BMS configured capacity; cell model not independently confirmed. Efficiency (85%) and inverter standby consumption (15 W) are hypothetical; use a wattmeter to calibrate.
-- Windows power plan CPU percentages are *performance ceilings*, not exact watt limits. Platform firmware may not honor every setting.
+- Windows power plan CPU percentages are *performance ceilings*, not exact watt limits. Platform firmware may not honor every setting. The app prevents inactivity-triggered sleep only in its cloned plans; it cannot prevent manual, firmware, or third-party power transitions.
 - Windows HDD idle settings do not immediately spin down every disk; SSD/NVMe drives normally do not benefit from mechanical disk standby.
 - DDC/CI requires compatible external monitors and a cable/adapter passing DDC commands. It can be disabled in the monitor OSD. Sending DDC/CI power-off can leave a monitor requiring its physical button to wake. Leave the primary display active and test the secondary displays individually with access to their controls.
 - Per-monitor power commands do not guarantee zero power draw or remove a display from Windows layout.
@@ -40,7 +40,7 @@ Build artifacts: target/release/zilla-power-manager.exe. The Windows GitHub Acti
 
 1. Save work. Record the active scheme from powercfg /getactivescheme.
 2. Launch Normal first and set manual SOC/watts; inspect the calculator.
-3. Try Eco and verify the new Zilla plan from powercfg /list; confirm your applications work as expected.
+3. Try Eco and verify the new Zilla plan from powercfg /list; confirm your applications work as expected. Inspect `powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE`, `powercfg /query SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE` and `powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE`. Both AC and DC values should be zero.
 4. Switch back to Normal, confirm the original GUID.
 5. Enable DDC/CI on one secondary monitor, then test the secondary sleep button. Ensure primary stays visible, and test wake button.
 6. If monitor wake fails, press its physical power button. Do not rely on it for emergency shutdown.
