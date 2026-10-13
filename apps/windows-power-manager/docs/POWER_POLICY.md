@@ -1,26 +1,24 @@
-# Power policy v0.1.1 — no automatic Windows sleep
+# Power Policy v0.2 — Windows 11 adjustable power manager
 
-Normal: restore the original user-selected Windows power scheme without modifying it.
+All settings change only one temporary copy of the original Windows power scheme, never the original itself. On clean exit, the original plan is restored when the Zilla clone remains active.
 
-Eco (cloned scheme only): CPU maximum processor state 65%; mechanical HDD idle 120 s; Windows system sleep (standby), hibernation and automatic display blanking timeouts all set to Never (0).
+| Profile | CPU performance max | HDD idle |
+| --- | --- | --- |
+| Maximum | 100% | Never |
+| Balanced | 80% | 300 seconds |
+| Minimum | 55% | 180 seconds |
+| Hard | 25% | 120 seconds |
+| Manual slider | 20–100% | 300 seconds |
+| AUTO | 35–95% (starts at 55% or current cap) | 300 seconds |
 
-Emergency (cloned scheme only): CPU maximum processor state 40%; mechanical HDD idle 60 s; Windows system sleep (standby), hibernation and automatic display blanking timeouts all set to Never (0).
+Windows processor minimum state is 5% on Zilla profiles. Both AC and DC values are configured. A KEMOT 230 V UPS looks AC-powered to Windows when it is running from LiFePO4.
 
-The cloned plans set both AC and DC values using `powercfg`:
-- `SUB_SLEEP/STANDBYIDLE = 0`
-- `SUB_SLEEP/HIBERNATEIDLE = 0`
-- `SUB_VIDEO/VIDEOIDLE = 0`
+All managed profiles disable Windows inactivity timers for system sleep (STANDBYIDLE=0), hibernation (HIBERNATEIDLE=0) and display blanking (VIDEOIDLE=0), both AC/DC. No system sleep/hibernate/shutdown APIs are called. Manual Windows/firmware sleep is not prevented. Restoring the original plan restores its original policy.
 
-The app issues no system sleep/hibernate/shutdown command. Manual sleep by the user, third-party utilities, or firmware-level suspend may still occur. Normal and clean app exit restore the original power plan; crashes/power outages require manual recovery, as described in README. All 230 V KEMOT UPS loads look like AC to Windows, hence both AC/DC changes.
+Secondary-only DDC/CI VCP 0xD6 off/on is explicit, hardware dependent and may fail to wake without the physical monitor button. The separate all-screens-off button broadcasts Windows WM_SYSCOMMAND SC_MONITORPOWER, without suspending Windows; keyboard/mouse usually wakes the monitors. When necessary it first enables a no-sleep cloned profile.
 
-Secondary-monitor off/on is an optional manual DDC/CI VCP 0xD6 operation, NOT PC sleep. The Windows primary display is never targeted. DDC/CI does not necessarily power down all monitors or guarantee remote wake.
+AUTO is disabled by default. It samples global CPU utilization every 3 s; 3 samples >=85% raise the CPU ceiling by 10 points, 10 samples <=20% lower it by 5, and 4 cooldown samples follow a change. Manual and preset controls disable AUTO. High single-core utilization may feel slow even at low total load, so AUTO is heuristic only.
 
-HDD standby may still occur after 60–120 s; SSD/NVMe behavior is defined by hardware/firmware. No process kills, GPU voltage modification, USB port disabling, or BMS writes.
+CPU performance % is NOT watts. Real total 230 V UPS power also includes GPU, motherboard, displays and inverter losses; 100 W cannot be guaranteed without a wall meter or proven UPS readings. NVIDIA GPU metrics are read-only chip readings, not UPS load. No GPU tuning is performed.
 
-To verify on Windows: save original `powercfg /getactivescheme`, select Eco/Emergency, then run:
-```powershell
-powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
-powercfg /query SCHEME_CURRENT SUB_SLEEP HIBERNATEIDLE
-powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
-```
-Verify **both AC and DC** show `0x00000000`. Return to Normal and confirm the initial GUID is active. Hardware validation remains pending.
+Hardware verification: save the active scheme GUID; select profiles and check powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX and all three inactivity aliases above (AC/DC zero). Confirm return to original GUID on Restore and clean exit. Test monitor wake on the target PC before relying on screen controls.
