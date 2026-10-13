@@ -64,9 +64,9 @@ mod platform {
             if device.state_flags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP != 0
                 && device.state_flags & DISPLAY_DEVICE_PRIMARY_DEVICE != 0
             {
-                primary = format!("{} · {}",
-                    utf16(&device.device_name),
-                    utf16(&device.device_string));
+                // Win32 device_string is usually the graphics adapter name,
+                // NOT the physical monitor's marketing/model name.
+                primary = utf16(&device.device_name);
                 break;
             }
             i += 1;
@@ -74,7 +74,7 @@ mod platform {
         if primary.is_empty() {
             format!("Windows: {count} активних екранів; головний не визначений")
         } else {
-            format!("Windows: {count} активних екранів · головний: {primary}")
+            format!("Windows: {count} активних дисплеїв · головний у Windows: {primary}")
         }
     }
 
