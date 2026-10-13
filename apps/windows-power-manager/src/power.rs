@@ -183,15 +183,6 @@ impl PowerPlans {
         }
     }
 
-    pub fn ensure_awake_for_display_off(&mut self) -> Result<(), String> {
-        if self.current_cap.is_none() {
-            // The monitor-off command must not leave the PC using a plan
-            // that could automatically suspend on inactivity.
-            self.apply(100, 300, "Екрани")?;
-        }
-        Ok(())
-    }
-
     pub fn normal(&mut self) -> Result<String, String> {
         #[cfg(not(windows))]
         {
