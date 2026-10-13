@@ -90,32 +90,3 @@ pub fn set_secondary_power(on: bool) -> Result<String, String> {
     #[cfg(not(windows))]
     { let _ = on; Err("Керування дисплеями можливе тільки у Windows".into()) }
 }
-
-
-/// Ask Windows to switch off ALL displays, including the primary, without
-/// suspending the computer. Mouse/keyboard activity normally wakes them.
-/// This uses a monitor-power message, NOT SetSuspendState or shutdown.
-pub fn turn_off_all() -> Result<String, String> {
-    #[cfg(windows)]
-    {
-        #[link(name = "user32")]
-        extern "system" {
-            fn PostMessageW(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> i32;
-        }
-        const HWND_BROADCAST: isize = 0xFFFF;
-        const WM_SYSCOMMAND: u32 = 0x0112;
-        const SC_MONITORPOWER: usize = 0xF170;
-        // Broadcast asynchronously so a hung window cannot block our UI.
-        let ok = unsafe {
-            PostMessageW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2)
-        };
-        if ok == 0 {
-            return Err("Windows не прийняла команду вимкнення екранів".to_owned());
-        }
-        Ok("Команду вимкнення екранів надіслано. ПК продовжує працювати; ворухни мишею для повернення".to_owned())
-    }
-    #[cfg(not(windows))]
-    {
-        Err("Керування екранами доступне тільки у Windows".to_owned())
-    }
-}
