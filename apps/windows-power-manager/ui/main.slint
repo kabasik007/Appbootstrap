@@ -47,6 +47,7 @@ export component MainWindow inherits Window {
     in property <string> cpu-watts-text: "CPU package: Вт н/д";
     in property <string> ram-text: "RAM: —";
     in property <string> gpu-text: "AMD/NVIDIA: визначення...";
+    in property <string> display-text: "Windows: визначення головного дисплея...";
     in property <string> limit-text: "CPU ≤ 55% (ще не застосовано)";
     in property <string> plan-text: "Windows (початковий)";
     in property <string> auto-text: "АВТО · ВИМКНЕНО";
@@ -56,8 +57,9 @@ export component MainWindow inherits Window {
     callback preset-requested(int);
     callback manual-requested(float);
     callback auto-requested();
-    callback secondary-sleep-requested();
-    callback secondary-wake-requested();
+    callback preview-primary-requested();
+    callback confirm-primary-requested();
+    callback restore-extended-requested();
     callback restore-requested();
 
     VerticalLayout {
@@ -213,17 +215,19 @@ export component MainWindow inherits Window {
         Rectangle {
             background: #172437;
             border-radius: 13px;
-            height: 105px;
+            height: 148px;
             VerticalLayout {
                 padding: 13px;
                 spacing: 8px;
-                Text { text: "МОНІТОРИ · ГОЛОВНИЙ ЗАВЖДИ ЗАЛИШАЄТЬСЯ"; color: #9eb6d2; font-size: 12px; font-weight: 800; }
+                Text { text: "МОНІТОРИ · КЕРУВАННЯ ЧЕРЕЗ WINDOWS (БЕЗ DDC/CI)"; color: #9eb6d2; font-size: 12px; font-weight: 800; }
+                Text { text: root.display-text; color: #cde2f5; font-size: 12px; wrap: word-wrap; }
                 HorizontalLayout {
-                    spacing: 10px;
-                    Button { text: "ТІЛЬКИ ГОЛОВНИЙ"; clicked => { root.secondary-sleep-requested(); } }
-                    Button { text: "ВІДНОВИТИ ДОДАТКОВІ"; clicked => { root.secondary-wake-requested(); } }
+                    spacing: 8px;
+                    Button { text: "ОДИН ЕКРАН · ТЕСТ 20 С"; clicked => { root.preview-primary-requested(); } }
+                    Button { text: "ЗАЛИШИТИ"; clicked => { root.confirm-primary-requested(); } }
+                    Button { text: "РОЗШИРИТИ ЕКРАНИ"; clicked => { root.restore-extended-requested(); } }
                 }
-                Text { text: "DDC/CI працює не на всіх моніторах. Відновлення іноді потребує фізичної кнопки."; color: #d6b98b; font-size: 11px; }
+                Text { text: "Використовується головний дисплей саме Windows. Він має бути фізично ввімкненим. Без підтвердження інші екрани повернуться за 20 с."; color: #e5bb85; font-size: 11px; wrap: word-wrap; }
             }
         }
 
