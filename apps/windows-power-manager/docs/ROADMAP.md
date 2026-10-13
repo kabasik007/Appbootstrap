@@ -2,7 +2,7 @@
 
 ## v0.1 — manual policy (in implementation)
 - Rust+Slint UI, manual SOC/watt estimate, CPU/RAM sampling
-- Normal/Eco/Emergency reversible Windows power plans
+- Normal/Eco/Emergency reversible Windows power plans; no automatic PC sleep/hibernate in cloned profiles
 - Secondary-only DDC/CI manual sleep/wake and recovery
 - Windows CI + unit tests
 
@@ -15,7 +15,7 @@
 ## v0.3 — safe automation
 - Sustained discharge detection + optional AC sensor to distinguish UPS mode
 - Configurable delayed Eco when on battery, automatic Normal on stable mains
-- Warn-before-hibernate and explicit opt-in; no auto on stale telemetry
+- Critical battery warnings only, without sleep/hibernate automation; no auto power transition on stale telemetry
 - Per-display policy and DDC/CI capability detection, hotplug
 
 ## v0.4 — desktop polish
