@@ -15,7 +15,7 @@ enum Action {
     Preset(power::Preset),
     Manual(u8),
     AutoToggle,
-    ObserveCpu(f32),
+    ObserveCpu(f32, f32),
     PreviewPrimary,
     ConfirmPrimary,
     RestoreExtended,
@@ -192,8 +192,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         })
                     }
                 }
-                Action::ObserveCpu(usage) => {
-                    if let Some(next_cap) = auto.observe(usage) {
+                Action::ObserveCpu(usage, peak_core) => {
+                    if let Some(next_cap) = auto.observe_with_peak(usage, peak_core) {
                         let result = plans.apply_adaptive(next_cap);
                         match result {
                             Ok(message) => Ok(Feedback::profile(message, "Авто", next_cap, true)),
@@ -347,12 +347,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             system.refresh_cpu_usage();
             system.refresh_memory();
             let utilization = system.global_cpu_usage();
-            let _ = cpu_tx.send(Action::ObserveCpu(utilization));
+            let peak_core = system.cpus().iter()
+                .map(|cpu| cpu.cpu_usage())
+                .filter(|value| value.is_finite())
+                .fold(0.0_f32, f32::max);
+            let _ = cpu_tx.send(Action::ObserveCpu(utilization, peak_core));
             let cpu_name = system.cpus().first()
                 .map(|cpu| cpu.brand().trim())
                 .filter(|name| !name.is_empty())
                 .unwrap_or("CPU: модель недоступна");
-            let cpu_text = format!("{cpu_name} · {utilization:.0}% завантаження (не Вт)");
+            let cpu_text = format!("{cpu_name} · {utilization:.0}% загалом · до {peak_core:.0}% на потоці");
             let ram_text = format!(
                 "RAM: {:.1}/{:.1} ГБ",
                 system.used_memory() as f64 / 1e9,
