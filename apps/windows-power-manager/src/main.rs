@@ -166,9 +166,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             Ok(message) => Ok(Feedback::profile(message, "Авто", next_cap, true)),
                             Err(message) => {
                                 auto.disable();
-                                Err(format!(
-                                    "{message}; автоматичний режим вимкнено"
-                                ))
+                                Ok(Feedback {
+                                    message: format!("ПОМИЛКА: {message}; авто вимкнено"),
+                                    profile: Some("Профіль недоступний".to_owned()),
+                                    cap: None,
+                                    automatic: Some(false),
+                                })
                             }
                         }
                     } else {
@@ -190,9 +193,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result.map(Feedback::message)
                 }
                 Action::AllDisplaysOff => {
+                    let had_profile = plans.current_cap().is_some();
                     plans.ensure_awake_for_display_off()
                         .and_then(|()| displays::turn_off_all())
-                        .map(Feedback::message)
+                        .map(|message| {
+                            if had_profile {
+                                Feedback::message(message)
+                            } else {
+                                Feedback::profile(message, "Екрани (100%)", 100, false)
+                            }
+                        })
                 }
                 Action::RestoreWindows => {
                     let result = plans.normal();
