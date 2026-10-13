@@ -47,6 +47,25 @@ Add-Result "Процесор" {
         Select-Object Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
 }
 
+Add-Result "Зведення сокетів CPU і логічних потоків" {
+    $processors = @(Get-CimInstance Win32_Processor -ErrorAction Stop)
+    [PSCustomObject]@{
+        PhysicalProcessors = $processors.Count
+        Cores = ($processors | Measure-Object -Property NumberOfCores -Sum).Sum
+        LogicalProcessors = ($processors | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+        MaxClockMHz = ($processors | Measure-Object -Property MaxClockSpeed -Maximum).Maximum
+    } | Format-List
+}
+
+Add-Result "Оперативна пам'ять (кількість модулів, без serial)" {
+    $modules = @(Get-CimInstance Win32_PhysicalMemory -ErrorAction Stop)
+    [PSCustomObject]@{
+        Modules = $modules.Count
+        TotalGB = [math]::Round((($modules | Measure-Object -Property Capacity -Sum).Sum / 1GB), 1)
+        SpeedsMHz = (($modules | Where-Object { $_.Speed -gt 0 } | Select-Object -ExpandProperty Speed -Unique) -join ",")
+    } | Format-List
+}
+
 Add-Result "Відеокарти Windows" {
     Get-CimInstance Win32_VideoController -ErrorAction Stop |
         Select-Object Name, VideoProcessor, DriverVersion, Status, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate
@@ -119,6 +138,17 @@ Add-Result "Датчики GPU/CPU, якщо працює LibreHardwareMonitor W
         Write-Output "Потрібен запущений LibreHardwareMonitor з робочим WMI; деякі версії мають відомий збій WMI."
     }
 }
+
+Add-Result "Додаткова інформація GPU: доступні AMD-процеси" {
+    Get-Process -Name RadeonSoftware,AMDRSServ,amdow -ErrorAction SilentlyContinue |
+        Select-Object ProcessName, Id | Format-Table -AutoSize
+}
+
+Add-Section "Пояснення конфігурації моніторів"
+Add-Line "Логічний Primary відповідає налаштуванням Windows і може бути іншим, ніж фізично бажаний головний."
+Add-Line "Win32_VideoController.CurrentRefreshRate не є перевіркою частоти кожного окремого дисплея."
+Add-Line "Для визначення фактичних моніторів скористайся Windows Settings > System > Display > Identify."
+Add-Line "Вимкнення DDC/CI лишає логічний дисплей активним. Не використовуйте фізичне вимкнення для зняття екрану з робочого столу."
 
 Add-Section "Пояснення ватів"
 Add-Line "GPU Board Power / CPU Package Power - лише відповідні компоненти, а не всі вати інвертора."
