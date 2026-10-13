@@ -1,4 +1,5 @@
-# Zilla Power Manager diagnostics (READ ONLY).
+﻿# Zilla Power Manager diagnostics (READ ONLY).
+# Windows PowerShell 5.1 must detect the UTF-8 BOM to correctly decode Cyrillic.
 # Windows 11 PowerShell 5.1 or 7; does not change power plans, displays,
 # BIOS, clocks, battery controller, GPU limits, or registry.
 param(
